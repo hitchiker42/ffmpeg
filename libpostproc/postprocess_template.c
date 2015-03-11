@@ -31,9 +31,7 @@
  * TEMPLATE_PP_* need to be undef at the end. */
 
 #ifdef TEMPLATE_PP_C
-#   define RENAME(a) a ## _C
-#else
-#   define TEMPLATE_PP_C 0
+#   error "Use postprocess_c.c for C postprocessing functions not postprocess_template.c"
 #endif
 
 #ifdef TEMPLATE_PP_ALTIVEC
