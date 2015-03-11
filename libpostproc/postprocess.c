@@ -198,14 +198,9 @@ static inline void prefetcht2(const void *p)
     );
 }
 #endif
-
-#include "postprocess_c.c"
-
-//Note: we have C, MMX, MMX2, 3DNOW version there is no 3DNOW+MMX2 one
 //Plain C versions
-//we always compile C for testing which needs bitexactness
-#define TEMPLATE_PP_C 1
-#include "postprocess_template.c"
+#include "postprocess_c.c"
+//Note: we have C, MMX, MMX2, 3DNOW version there is no 3DNOW+MMX2 one
 
 #if HAVE_ALTIVEC
 #   define TEMPLATE_PP_ALTIVEC 1
