@@ -174,5 +174,20 @@ static inline void linecpy(void *dest, const void *src, int lines, int stride) {
         memcpy((uint8_t*)dest+(lines-1)*stride, (const uint8_t*)src+(lines-1)*stride, -lines*stride);
     }
 }
-
+/*
+   Currently blocks are always 8xN bytes, where N is determined by the size of
+   the simd registers being used
+*/
+static const int block_height = 8;
+#if ARCH_X86 && !CONFIG_RUNTIME_CPUDETECT
+#if HAVE_AVX2
+static const int block_width = 32;
+#elif HAVE_SSE2
+static const int block_width = 16;
+#else
+static const int block_width = 8;
+#endif
+#else
+static int block_width; //determined at runtime
+#endif
 #endif /* POSTPROC_POSTPROCESS_INTERNAL_H */

@@ -364,7 +364,7 @@ static inline void RENAME(doVertLowPass)(uint8_t *src, int stride, PPContext *c)
     const int l9= stride + l8;
     int x;
     src+= stride*3;
-    for(x=0; x<BLOCK_SIZE; x++){
+    for(x=0; x<block_width; x++){
         const int first= FFABS(src[0] - src[l1]) < c->QP ? src[0] : src[l1];
         const int last= FFABS(src[l8] - src[l9]) < c->QP ? src[l9] : src[l8];
 
@@ -505,7 +505,7 @@ static inline void RENAME(vertX1Filter)(uint8_t *src, int stride, PPContext *co)
     int x;
 
     src+= stride*3;
-    for(x=0; x<BLOCK_SIZE; x++){
+    for(x=0; x<block_width; x++){
         int a= src[l3] - src[l4];
         int b= src[l4] - src[l5];
         int c= src[l5] - src[l6];
@@ -1057,7 +1057,7 @@ static inline void RENAME(doVertDefFilter)(uint8_t src[], int stride, PPContext 
 //    const int l9= stride + l8;
     int x;
     src+= stride*3;
-    for(x=0; x<BLOCK_SIZE; x++){
+    for(x=0; x<block_width; x++){
         const int middleEnergy= 5*(src[l5] - src[l4]) + 2*(src[l3] - src[l6]);
         if(FFABS(middleEnergy) < 8*c->QP){
             const int q=(src[l4] - src[l5])/2;
@@ -3175,7 +3175,7 @@ SCALED_CPY((%%REGa, %4), (%%REGa, %4, 2), (%%REGd, %5), (%%REGd, %5, 2))
 #else //TEMPLATE_PP_MMX && HAVE_6REGS
     for(i=0; i<8; i++)
         memcpy( &(dst[dstStride*i]),
-                &(src[srcStride*i]), BLOCK_SIZE);
+                &(src[srcStride*i]), block_width);
 #endif //TEMPLATE_PP_MMX && HAVE_6REGS
     }else{
 #if TEMPLATE_PP_MMX && HAVE_6REGS
@@ -3208,7 +3208,7 @@ SIMPLE_CPY((%%REGa, %2), (%%REGa, %2, 2), (%%REGd, %3), (%%REGd, %3, 2))
 #else //TEMPLATE_PP_MMX && HAVE_6REGS
     for(i=0; i<8; i++)
         memcpy( &(dst[dstStride*i]),
-                &(src[srcStride*i]), BLOCK_SIZE);
+                &(src[srcStride*i]), block_width);
 #endif //TEMPLATE_PP_MMX && HAVE_6REGS
     }
 }
@@ -3357,7 +3357,7 @@ static void RENAME(postProcess)(const uint8_t src[], int srcStride, uint8_t dst[
     }
 
     /* copy & deinterlace first row of blocks */
-    y=-BLOCK_SIZE;
+    y=-block_height;
     {
         const uint8_t *srcBlock= &(src[y*srcStride]);
         uint8_t *dstBlock= tempDst + dstStride;
@@ -3365,7 +3365,7 @@ static void RENAME(postProcess)(const uint8_t src[], int srcStride, uint8_t dst[
         // From this point on it is guaranteed that we can read and write 16 lines downward
         // finish 1 block before the next otherwise we might have a problem
         // with the L1 Cache of the P4 ... or only a few blocks at a time or something
-        for(x=0; x<width; x+=BLOCK_SIZE){
+        for(x=0; x<width; x+=block_width){
 
 #if TEMPLATE_PP_MMXEXT && HAVE_6REGS
 /*
@@ -3436,7 +3436,7 @@ static void RENAME(postProcess)(const uint8_t src[], int srcStride, uint8_t dst[
         }
     }
 
-    for(y=0; y<height; y+=BLOCK_SIZE){
+    for(y=0; y<height; y+=block_height){
         //1% speedup if these are here instead of the inner loop
         const uint8_t *srcBlock= &(src[y*srcStride]);
         uint8_t *dstBlock= &(dst[y*dstStride]);
@@ -3474,7 +3474,7 @@ static void RENAME(postProcess)(const uint8_t src[], int srcStride, uint8_t dst[
         // From this point on it is guaranteed that we can read and write 16 lines downward
         // finish 1 block before the next otherwise we might have a problem
         // with the L1 Cache of the P4 ... or only a few blocks at a time or something
-        for(x=0; x<width; x+=BLOCK_SIZE){
+        for(x=0; x<width; x+=block_width){
             const int stride= dstStride;
 #if TEMPLATE_PP_MMX
             uint8_t *tmpXchg;
