@@ -1,0 +1,116 @@
+;******************************************************************************
+;*
+;* Copyright (c) 2015 Tucker DiNapoli
+;*
+;* Utility code/marcos used in asm files for libpostproc
+;*
+;* This file is part of FFmpeg.
+;*
+;* FFmpeg is free software; you can redistribute it and/or modify
+;* it under the terms of the GNU General Public License as published by
+;* the Free Software Foundation; either version 2 of the License, or
+;* (at your option) any later version.
+;*
+;* FFmpeg is distributed in the hope that it will be useful,
+;* but WITHOUT ANY WARRANTY; without even the implied warranty of
+;* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+;* GNU General Public License for more details.
+;*
+;* You should have received a copy of the GNU General Public License
+;* along with FFmpeg; if not, write to the Free Software
+;* Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
+;*
+%include "libavutil/x86/x86util.asm"
+%include "PPContext.asm"
+;; Macros to simplify moving packed data
+
+;; copy low quadword to upper quadword(s)
+%macro dup_low_quadword 1
+%if cpuflag(sse2)
+    pshufpd %1, %1, 0x00
+%elif cpuflag(avx2)
+    vpermq %1, %1, 01010101b
+%endif
+%endmacro
+
+;; move the low half of the mmx/xmm/ymm register in %2 into %1
+;; %1 should be a memory location
+%macro mov_vector_low_half 2
+%if mmsize == 32
+vextractf128 %1, %2, 0x00
+%elif mmsize == 16
+movlpd %1, %2
+%elif mmsize == 8
+movd %1, %2
+%else
+%error "mmsize defined to unsupported value"
+%endif
+%endmacro
+;; move the high half of the mmx/xmm/ymm register in %2 into %1
+;; %1 should be a memory location
+%macro mov_vector_high_half 2-3 m0
+%if mmsize == 32
+vextractf128 %1, %2, 0x01
+%elif mmsize == 16
+movhpd %1, %2
+%elif mmsize == 8
+;; there's no instruction, pre sse4.1, to move the high 32 bits of an mmx
+;; register, so use the optional third argument as a temporary register
+;; shift it right by 32 bits and extract the low doubleword
+movq %3, %2
+psrl %3, 32
+movd %1, %3
+%else
+%error "mmsize defined to unsupported value"
+%endif
+%endmacro
+
+;; define packed conditional moves, of the form:
+;; pcmovXXS dst, src, arg1, arg2, tmp
+;; where XX is a comparision (eq,ne,gt,...) and S is a size(b,w,d,q)
+;; copy src to dest, then compare arg1 with arg2 and store
+;; the result in tmp, finally AND src with tmp.
+%macro do_simd_sizes 2
+%1 %2b
+%1 %2w
+%1 %2d
+%1 %2q
+%endmacro
+;; macro generating macro
+%macro gen_pcmovxx 1 
+%macro pcmov%1 4-6 ,%1 ;;dst, src, cmp1, cmp2, [tmp = cmp2]
+%if %0 == 5
+%ifnidn %5,%3
+    mova %5,%3
+%endif
+%endif
+    pcmp%6 %5,%4
+    mova %1, %2
+    pand %1, %5
+%endmacro
+%endmacro
+do_simd_sizes gen_pcmovxx,eq
+do_simd_sizes gen_pcmovxx,ne
+do_simd_sizes gen_pcmovxx,lt
+do_simd_sizes gen_pcmovxx,le
+do_simd_sizes gen_pcmovxx,gt
+do_simd_sizes gen_pcmovxx,ge
+
+;; Macros for defining simd constants
+%macro define_qword_vector_constant 5
+%if cpuflag(avx2)
+SECTION_RODATA 32
+%else
+SECTION_RODATA 16
+%endif
+%1: 
+    dq %2
+%if cpuflag(sse2)
+    dq %3
+%if cpuflag(avx2)
+    dq %4
+    dq %5
+%endif
+%endif
+SECTION_TEXT
+%endmacro
