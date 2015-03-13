@@ -194,6 +194,20 @@ static inline void prefetcht2(const void *p)
         : : "r" (p)
     );
 }
+#else
+//judging by the gcc manuals this is a conservative estimate for when
+// __builtin_prefetch was added
+#if AV_GCC_VERSION_AT_LEAST(3,3)
+#define prefetchnta(p) __builtin_prefetch(p,0,0)
+#define prefetcht0(p) __builtin_prefetch(p,0,1)
+#define prefetcht1(p) __builtin_prefetch(p,0,2)
+#define prefetcht2(p) __builtin_prefetch(p,0,3)
+#else
+#define prefetchnta(p)
+#define prefetcht0(p)
+#define prefetcht1(p)
+#define prefetcht2(p)
+#endif
 #endif
 //Plain C versions
 #include "postprocess_c.c"
