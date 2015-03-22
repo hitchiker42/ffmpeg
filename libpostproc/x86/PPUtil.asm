@@ -33,6 +33,8 @@
 %endif
 %endmacro
 
+%macro dup_low_byte 1
+%endmacro
 ;; move the low half of the mmx/xmm/ymm register in %2 into %1
 ;; %1 should be a memory location
 %macro mov_vector_low_half 2
@@ -194,6 +196,11 @@ cglobal block_copy, 6, 6, 8
 .end:
     REP_RET
 %endmacro
+;; emulate the ptest instruction from sse41 for earlier cpus
+;; the operation is:
+;; if src = ~dst then set zf; if src == dst then set cf
+;;%macro ptest_generic 3 ;; dst, src, tmp, tmp is a general purpose register
+;;%if cpuflag(sse41)
 ;; cglobal transpose_block, 4, 6, 7 ;src, src_stride, dst, dst_stride
 ;;     lea r5, [r3 + 4*r4]
 ;; 

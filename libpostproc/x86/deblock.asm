@@ -45,8 +45,8 @@ cglobal do_a_deblock, 5, 7, 7 ;src, step, stride, ppcontext, mode
     lea r1, [r1 + r2*2]
     add r1, r2
 
-    mov m7, [(r4 + PPContext.mmxDcOffset) + (r4 + PPContext.nonBQP) * 8]
-    mov m6, [(r4 + PPContext.mmxDcThreshold) + (r4 + PPContext.nonBQP) * 8]
+    mov m7, [(r4 + PPContext.mmx_dc_offset) + (r4 + PPContext.nonBQP) * 8]
+    mov m6, [(r4 + PPContext.mmx_dc_threshold) + (r4 + PPContext.nonBQP) * 8]
 
     lea r6, [r1 + r2]
     mova m0, [r1]
@@ -67,6 +67,7 @@ cglobal do_a_deblock, 5, 7, 7 ;src, step, stride, ppcontext, mode
     pcmpgtb %2, m6
     paddb m0, %2
 %endmacro
+%endif
     get_mask_step m2, m1, [r6 + r2]
     get_mask_step m1, m2, [r6 + r2*2]
     lea r6, [r6 + r2*4]
@@ -97,7 +98,10 @@ cglobal do_a_deblock, 5, 7, 7 ;src, step, stride, ppcontext, mode
     pcmpgtb m6, m7
     mova [rsp + 20*mmsize], m6; eq_mask
 
-    ptest m6, [rsp + 168*mmsize]
+;;    ptest m6, [rsp + 21*mmsize]
+    pcmpeqb  m6, [rsp + 21*mmsize]
+    pmovmskb r6, m6
+    test r6, r6
     ;; if eq_mask & dc_mask == 0 jump to .skip
     jnz .skip
     lea r6, [r2 * 8]
@@ -149,7 +153,7 @@ cglobal do_a_deblock, 5, 7, 7 ;src, step, stride, ppcontext, mode
     paddw m0, [w04]
     paddw m1, [w04]
 %ifnmacro pp_next
-%defmacro pp_next 0
+%macro pp_next 0
     mova m2, [r1]
     mova m3, [r1]
     add r1, r2
@@ -251,7 +255,7 @@ cglobal do_a_deblock, 5, 7, 7 ;src, step, stride, ppcontext, mode
     mova m1, [r7 + 1*mmsize]
     paddw m0, [r7 + 2*mmsize]
     paddw m1, [r7 + 3*mmsize]
-    movva m2, [r1, r6]
+    mova m2, [r1 + r6]
     mova m3, m2
     mova m4, m2
     punpcklbw m2, m7
@@ -264,7 +268,7 @@ cglobal do_a_deblock, 5, 7, 7 ;src, step, stride, ppcontext, mode
     psrlw m1, 4
     packuswb m0, m1
     pand m0, m6
-    pand m4. m5
+    pand m4, m5
     por m0, m4
     mova m0, [r1 + r6]
     add r7, 16
@@ -275,7 +279,7 @@ cglobal do_a_deblock, 5, 7, 7 ;src, step, stride, ppcontext, mode
     add r1, r2
 
 .test:
-    pcmpeq m6, m6;;may change this register
+    pcmpeqb m6, m6;;may change this register
     ptest m6, [rsp + 20*mmsize]
     jc .end
 
@@ -315,10 +319,10 @@ cglobal do_a_deblock, 5, 7, 7 ;src, step, stride, ppcontext, mode
     psubw m0, m2 ; 2L0 - 5L1 + 5L2
     psubw m1, m3 ; 2H0 - 5H1 + 5H2
 
-    mova m2 [r6 + r2]
+    mova m2, [r6 + r2]
     mova m3, m2
     punpcklbw m2, m7 ; L3
-    punpckhmw m3, m7 ; H3
+    punpckhbw m3, m7 ; H3
 
     psubw m0, m2
     psubw m1, m3
@@ -329,10 +333,10 @@ cglobal do_a_deblock, 5, 7, 7 ;src, step, stride, ppcontext, mode
     mova [rsp], m0
     mova [rsp + 1*mmsize], m1
 
-    mova m0 [r6 + r2*2]
+    mova m0, [r6 + r2*2]
     mova m1, m0
     punpcklbw m0, m7 ; L4
-    punpckhmw m1, m7 ; H4
+    punpckhbw m1, m7 ; H4
 
     psubw m2, m0 ;L3-L4
     psubw m3, m1
@@ -431,7 +435,7 @@ cglobal do_a_deblock, 5, 7, 7 ;src, step, stride, ppcontext, mode
     psubusw m5, m1
 
 
-    mova m2, [w5]
+    mova m2, [w05]
     pmullw m4, m2
     pmullw m5, m2
     mova m2, [w20]
