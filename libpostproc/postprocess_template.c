@@ -3367,33 +3367,11 @@ static void RENAME(postProcess)(const uint8_t src[], int srcStride, uint8_t dst[
         // with the L1 Cache of the P4 ... or only a few blocks at a time or something
         for(x=0; x<width; x+=BLOCK_SIZE){
 
-#if TEMPLATE_PP_MMXEXT && HAVE_6REGS
-/*
-            prefetchnta(srcBlock + (((x>>2)&6) + 5)*srcStride + 32);
-            prefetchnta(srcBlock + (((x>>2)&6) + 6)*srcStride + 32);
-            prefetcht0(dstBlock + (((x>>2)&6) + 5)*dstStride + 32);
-            prefetcht0(dstBlock + (((x>>2)&6) + 6)*dstStride + 32);
-*/
+            prefetchnta(srcBlock + (((x>>2)&6) + copyAhead)*srcStride + 32);
+            prefetchnta(srcBlock + (((x>>2)&6) + copyAhead + 1)*srcStride + 32);
+            prefetcht0(dstBlock + (((x>>2)&6) + copyAhead)*dstStride + 32);
+            prefetcht0(dstBlock + (((x>>2)&6) + copyAhead + 1)*dstStride + 32);
 
-            __asm__(
-                "mov %4, %%"REG_a"              \n\t"
-                "shr $2, %%"REG_a"              \n\t"
-                "and $6, %%"REG_a"              \n\t"
-                "add %5, %%"REG_a"              \n\t"
-                "mov %%"REG_a", %%"REG_d"       \n\t"
-                "imul %1, %%"REG_a"             \n\t"
-                "imul %3, %%"REG_d"             \n\t"
-                "prefetchnta 32(%%"REG_a", %0)  \n\t"
-                "prefetcht0 32(%%"REG_d", %2)   \n\t"
-                "add %1, %%"REG_a"              \n\t"
-                "add %3, %%"REG_d"              \n\t"
-                "prefetchnta 32(%%"REG_a", %0)  \n\t"
-                "prefetcht0 32(%%"REG_d", %2)   \n\t"
-                :: "r" (srcBlock), "r" ((x86_reg)srcStride), "r" (dstBlock), "r" ((x86_reg)dstStride),
-                "g" ((x86_reg)x), "g" ((x86_reg)copyAhead)
-                : "%"REG_a, "%"REG_d
-            );
-#endif
 
             RENAME(blockCopy)(dstBlock + dstStride*8, dstStride,
                               srcBlock + srcStride*8, srcStride, mode & LEVEL_FIX, &c.packedYOffset);
@@ -3472,33 +3450,10 @@ static void RENAME(postProcess)(const uint8_t src[], int srcStride, uint8_t dst[
             uint8_t *dstBlockStart = dstBlock;
             const uint8_t *srcBlockStart = srcBlock;
           for(; x < endx; x+=BLOCK_SIZE){
-#if TEMPLATE_PP_MMXEXT && HAVE_6REGS
-/*
-            prefetchnta(srcBlock + (((x>>2)&6) + 5)*srcStride + 32);
-            prefetchnta(srcBlock + (((x>>2)&6) + 6)*srcStride + 32);
-            prefetcht0(dstBlock + (((x>>2)&6) + 5)*dstStride + 32);
-            prefetcht0(dstBlock + (((x>>2)&6) + 6)*dstStride + 32);
-*/
-
-            __asm__(
-                "mov %4, %%"REG_a"              \n\t"
-                "shr $2, %%"REG_a"              \n\t"
-                "and $6, %%"REG_a"              \n\t"
-                "add %5, %%"REG_a"              \n\t"
-                "mov %%"REG_a", %%"REG_d"       \n\t"
-                "imul %1, %%"REG_a"             \n\t"
-                "imul %3, %%"REG_d"             \n\t"
-                "prefetchnta 32(%%"REG_a", %0)  \n\t"
-                "prefetcht0 32(%%"REG_d", %2)   \n\t"
-                "add %1, %%"REG_a"              \n\t"
-                "add %3, %%"REG_d"              \n\t"
-                "prefetchnta 32(%%"REG_a", %0)  \n\t"
-                "prefetcht0 32(%%"REG_d", %2)   \n\t"
-                :: "r" (srcBlock), "r" ((x86_reg)srcStride), "r" (dstBlock), "r" ((x86_reg)dstStride),
-                "g" ((x86_reg)x), "g" ((x86_reg)copyAhead)
-                : "%"REG_a, "%"REG_d
-            );
-#endif
+            prefetchnta(srcBlock + (((x>>2)&6) + copyAhead)*srcStride + 32);
+            prefetchnta(srcBlock + (((x>>2)&6) + copyAhead + 1)*srcStride + 32);
+            prefetcht0(dstBlock + (((x>>2)&6) + copyAhead)*dstStride + 32);
+            prefetcht0(dstBlock + (((x>>2)&6) + copyAhead + 1)*dstStride + 32);
 
             RENAME(blockCopy)(dstBlock + dstStride*copyAhead, dstStride,
                               srcBlock + srcStride*copyAhead, srcStride, mode & LEVEL_FIX, &c.packedYOffset);

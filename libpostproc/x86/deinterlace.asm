@@ -35,33 +35,33 @@
 ;; Set each line 2n+1 to (line 2n + line 2n+2)/2
 %macro gen_deinterlace_interpolate_linear 0
 cglobal deInterlaceInterpolateLinear, 2, 4, 2;, src, stride
-    lea r1, [r1 + r2 * 4]
-    lea r3, [r1 + r2]
-    lea r4, [r3 + r2 * 4]
-    mova m0, [r1]
-    mova m1, [r3 + r2]
+    lea r0, [r0 + r1 * 4]
+    lea r2, [r0 + r1]
+    lea r3, [r2 + r1 * 4]
+    mova m0, [r0]
+    mova m1, [r2 + r1]
+    pavgb m0,m1
+    mova [r2], m0
+    mova m0, [r0 + r1 * 4]
+    pavgb m1,m0
+    mova [r2 + r1 * 2],m1
+    mova m1, [r3 + r1]
     pavgb m0,m1
     mova [r3], m0
-    mova m0, [r1 + r2 * 4]
-    pavgb m1,m0
-    mova [r3 + r2 * 2],m1
-    mova m1, [r4 + r2]
+    mova m1, [r0 + r1 * 8]
     pavgb m0,m1
-    mova [r4], m0
-    mova m1, [r1 + r2 * 8]
-    pavgb m0,m1
-    mova [r4 + r2 * 2], m0
+    mova [r3 + r1 * 2], m0
     RET
 %endmacro
 ;; Deinterlace blocks using cubic interpolation
 ;; Line 2n+1 = (9(2n) + 9(2n+2) - (2n-2) - (2n+4))/16
 %macro gen_deinterlace_interpolate_cubic 0
 cglobal deInterlaceInterpolateCubic, 2, 5, 5;, src, stride
-    lea r3, [r2 + r2 * 2]
-    add r1,r3
-    lea r3, [r1 + r2]
-    lea r4, [r3 + r2 * 4]
-    lea r5, [r4 + r2 * 4]
+    lea r2, [r1 + r1 * 2]
+    add r0,r2
+    lea r2, [r0 + r1]
+    lea r3, [r2 + r1 * 4]
+    lea r4, [r3 + r1 * 4]
     pxor m4,m4
 %ifnmacro deint_cubic
 ;; given 5 lines a,b,c,d,e: a = c-3, b = c-1, d = c+1, e = c + 2
@@ -92,58 +92,58 @@ cglobal deInterlaceInterpolateCubic, 2, 5, 5;, src, stride
     mova %3, m1
 %endmacro
 %endif
-    deint_cubic [r1], [r3 + r2], [r3 + r2 *2],\
-                [r1 + r2 *4], [r4 + r2]
-    deint_cubic [r3 + r2], [r1 + r2 * 4], [r4],\
-                [r4 + r2], [r1 + r2 * 8]
-    deint_cubic [r1 + r2 * 4], [r4 + r2], [r4 + r2 * 2],\
-                [r1 + r2 * 8], [r5]
-    deint_cubic [r4 + r2], [r1 + r2 * 8], [r4 + r2 * 4],\
-                [r5], [r5 + r2 * 2]
+    deint_cubic [r0], [r2 + r1], [r2 + r1 *2],\
+                [r0 + r1 *4], [r3 + r1]
+    deint_cubic [r2 + r1], [r0 + r1 * 4], [r3],\
+                [r3 + r1], [r0 + r1 * 8]
+    deint_cubic [r0 + r1 * 4], [r3 + r1], [r3 + r1 * 2],\
+                [r0 + r1 * 8], [r4]
+    deint_cubic [r3 + r1], [r0 + r1 * 8], [r3 + r1 * 4],\
+                [r4], [r4 + r1 * 2]
     RET
 %endmacro
 
 ;; deinterlace blocks by seting every line n to (n-1 + 2n + n+1)/4
 %macro gen_deinterlace_blend_linear 0
 cglobal deInterlaceBlendLinear, 3, 5, 2 ;src, stride, tmp
-    lea r1, [r1 + r2 * 4]
-    lea r4, [r1 + r2]
-    lea r5, [r4 + r2 * 4]
-    mova m0, [r3] ;L0
-    mova m1, [r4] ;L2
-    mova m2, [r1] ;L1
+    lea r0, [r0 + r1 * 4]
+    lea r3, [r0 + r1]
+    lea r4, [r3 + r1 * 4]
+    mova m0, [r2] ;L0
+    mova m1, [r3] ;L2
+    mova m2, [r0] ;L1
     pavgb m0, m1 ;L0+L2
     pavgb m0, m2 ;L0 + 2L1 + L2 / 4
-    mova [r1], m0
-    mova m0, [r4 + r2 * 2] ;L3
+    mova [r0], m0
+    mova m0, [r3 + r1 * 2] ;L3
     pavgb m2, m0
     pavgb m2, m1
-    mova [r4], m2 ;L4
-    mova m2, [r4 + r2 * 2]
+    mova [r3], m2 ;L4
+    mova m2, [r3 + r1 * 2]
     pavgb m1, m2
     pavgb m1, m0
-    mova [r4+r2], m1 ;L5
-    mova m1, [r1 + r2 * 4]
+    mova [r3+r1], m1 ;L5
+    mova m1, [r0 + r1 * 4]
     pavgb m0, m1
     pavgb m0, m2
-    mova [r4 + r2 * 2], m0 ;L6
-    mova m0, [r5]
+    mova [r3 + r1 * 2], m0 ;L6
+    mova m0, [r4]
     pavgb m2, m0
     pavgb m2, m1
-    mova [r1 + r2 * 4], m2 ;L7
-    mova m2, [r5 + r2]
+    mova [r0 + r1 * 4], m2 ;L7
+    mova m2, [r4 + r1]
     pavgb m1, m2
     pavgb m1, m0
-    mova [r5], m1
-    mova m1, [r5 + r2 * 2]
+    mova [r4], m1
+    mova m1, [r4 + r1 * 2]
     pavgb m0, m1
     pavgb m0, m2
-    mova [r5 + r2], m0
-    mova m0, [r1 + r2 * 8]
+    mova [r4 + r1], m0
+    mova m0, [r0 + r1 * 8]
     pavgb m2, m0
     pavgb m2, m1
-    mova [r5 + r2 * 2], m2
-    mova [r3], m1
+    mova [r4 + r1 * 2], m2
+    mova [r2], m1
     RET
 %endmacro
 ;; I'm not exactly sure how to insure the following only get built if

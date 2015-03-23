@@ -48,36 +48,36 @@ define_qword_vector_constant dering_threshold,20,20,20,20
 cglobal dering, 3, 6, 7;src, stride, context, tmp1, tmp2, tmp3
 %if ARCH_X86_64 == 0
     sub esp,(4 * %%stacksz)
-    lea r6,esp
+    lea r5,esp
 %elif WIN64
     sub rsp,(4 * %%stacksz)
-    lea r6,rsp
+    lea r5,rsp
 %else
-    lea r6,[rsp + %%stacksz]
+    lea r5,[rsp + %%stacksz]
 %endif
     pxor m6,m6
     pcmpeqb m7,m7 ;set to 1s
 ;; Not sure what this does
-    movq m0, [r3 + PPContext.pQPb]
+    movq m0, [r2 + PPContext.pQPb]
     dup_low_quadword m0
     punpcklbw m0, m6
     psrlw m0, 1
     psubw m0, m7
     packuswb m0, m0
-    movq m0, [r3 + PPContext.pQPb2]
+    movq m0, [r2 + PPContext.pQPb2]
 ;; end not sure part
-    mov r4, [r1 + r2]
-    mov r5, [r4 + r2 * 4]
+    mov r3, [r0 + r1]
+    mov r4, [r3 + r1 * 4]
 ;; Would it be more efficent to use different registers for different lines
 ;; or can the cpu tell that m1-m5 aren't being used and alias them to m0?
+    find_min_max [r3]
+    find_min_max [r3 + r1]
+    find_min_max [r3 + r1 * 2]
+    find_min_max [r0 + r1 * 4]
     find_min_max [r4]
-    find_min_max [r4 + r2]
-    find_min_max [r4 + r2 * 2]
-    find_min_max [r1 + r2 * 4]
-    find_min_max [r5]
-    find_min_max [r5 + r2]
-    find_min_max [r5 + r2 * 2]
-    find_min_max [r1 + r2 * 8]
+    find_min_max [r4 + r1]
+    find_min_max [r4 + r1 * 2]
+    find_min_max [r0 + r1 * 8]
 ;; m6 holds the min of the rows, m7 the max
     mova m4, m7
     psrlq m7, 8
@@ -109,12 +109,12 @@ cglobal dering, 3, 6, 7;src, stride, context, tmp1, tmp2, tmp3
     pavgb m7, m0
     ;;fill all of m7 with what is currently the low byte
     %if cpuflag(avx2)
-    vpermq ymm7, ymm7, 0x00
+    vpermq m7, m7, 0x00
     %endif
-    punbcklbw mm7,mm7
-    punbcklbw mm7,mm7
-    punbcklbw mm7,mm7
-    mova m0, [r1]
+    punbcklbw m7,m7
+    punbcklbw m7,m7
+    punbcklbw m7,m7
+    mova m0, [r0]
     mova m1, m0
     mova m2, m0
 ;; I'm not sure how to translate this since I'm not exactly sure what the code is doing

@@ -139,27 +139,27 @@ SECTION_TEXT
 ;; void duplicate(uint8 *src, int stride)
 ;; duplicate block_size pixels 5 times upwards
 cglobal duplicate, 2, 2, 1
-    neg r2
-    mova m0, [r1]
-    mova [r1 + r2 * 4], m0
-    add r1, r2
-    mova [r1], m0
-    mova [r1 + r2], m0
-    mova [r1 + r2 * 2], m0
-    mova [r1 + r2 * 4], m0
-    neg r2
+    neg r1
+    mova m0, [r0]
+    mova [r0 + r1 * 4], m0
+    add r0, r1
+    mova [r0], m0
+    mova [r0 + r1], m0
+    mova [r0 + r1 * 2], m0
+    mova [r0 + r1 * 4], m0
+    neg r1
     RET
 ;; void blockcopy(uint8_t *dst, int dst_stride, uint8_t *src, int src_stride,
 ;;                int level_fix, int64_t *packed_offset_and_scale)
 ;; Copy src to dst, and possibly fix the brightness
 %macro gen_block_copy 0
 cglobal block_copy, 6, 6, 8
-    test r5, r5
+    test r4, r4
     jz .simple
-    mova m5, [r6] ;;offset
-    mova m6, [r6 + 32] ;;scale
-    lea r6, [r3 + r4] ;;dst + dst_stride
-    lea r5, [r1 + r2] ;;src + src_stride
+    mova m5, [r5] ;;offset
+    mova m6, [r5 + 32] ;;scale
+    lea r5, [r2 + r3] ;;dst + dst_stride
+    lea r4, [r0 + r1] ;;src + src_stride
 ;; I don't know a ton about how to properly order instructions
 ;; to maximize pipelining, so this might not be optimial
 %ifnmacro scaled_copy
@@ -181,36 +181,36 @@ cglobal block_copy, 6, 6, 8
     mova [%4], m2
 %endmacro
 %endif
-    scaled_copy [r1], [r1 + r2], [r3], [r3 + r4]
-    scaled_copy [r1 + r2*2], [r5 + r2*2], [r3 + r4*2], [r6 + r4*2]
-    scaled_copy [r1 + r2*4], [r5 + r2*4], [r3 + r4*4], [r6 + r4*4]
-    lea r5, [r5 + r2*4] 
-    lea r6, [r6 + r3*4]
-    scaled_copy [r5 + r2], [r5 + r2*2], [r6 + r4], [r6 + r4*2]
+    scaled_copy [r0], [r0 + r1], [r2], [r2 + r3]
+    scaled_copy [r0 + r1*2], [r4 + r1*2], [r2 + r3*2], [r5 + r3*2]
+    scaled_copy [r0 + r1*4], [r4 + r1*4], [r2 + r3*4], [r5 + r3*4]
+    lea r4, [r4 + r1*4] 
+    lea r5, [r5 + r2*4]
+    scaled_copy [r4 + r1], [r4 + r1*2], [r5 + r3], [r5 + r3*2]
     jmp .end
 .simple: ;;just a simple memcpy
     ;;if there's a better way to do this feel free to change it
     ;;Any necessary prefetching is done by the caller
-    lea r5, [r1 + r2] ;;src + src_stride
-    lea r6, [r5 + r2*4] ;;dst + dst_stride
-    mova m0, [r1]
-    mova m1, [r1 + r2]
-    mova m2, [r1 + r2*2]
-    mova m3, [r5 + r2*2]
-    mova m4, [r1 + r2*4]
-    mova m5, [r5 + r2*4]
-    mova m6, [r6 + r2]
-    mova m7, [r6 + r2*2]
-    lea r5, [r3 + r4]
-    lea r6, [r5 + r4*4]
-    mova m0, [r3]
-    mova [r3 + r4], m1
-    mova [r3 + r4*2], m2
-    mova [r5 + r4*2], m3
-    mova [r3 + r4*4], m4
-    mova [r5 + r4*4], m5
-    mova [r6 + r4], m6
-    mova [r6 + r4*2], m7
+    lea r4, [r0 + r1] ;;src + src_stride
+    lea r5, [r4 + r1*4] ;;dst + dst_stride
+    mova m0, [r0]
+    mova m1, [r0 + r1]
+    mova m2, [r0 + r1*2]
+    mova m3, [r4 + r1*2]
+    mova m4, [r0 + r1*4]
+    mova m5, [r4 + r1*4]
+    mova m6, [r5 + r1]
+    mova m7, [r5 + r1*2]
+    lea r4, [r2 + r3]
+    lea r5, [r4 + r3*4]
+    mova m0, [r2]
+    mova [r2 + r3], m1
+    mova [r2 + r3*2], m2
+    mova [r4 + r3*2], m3
+    mova [r2 + r3*4], m4
+    mova [r4 + r3*4], m5
+    mova [r5 + r3], m6
+    mova [r5 + r3*2], m7
 .end:
     REP_RET
 %endmacro

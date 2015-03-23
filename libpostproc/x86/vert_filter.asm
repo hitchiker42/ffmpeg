@@ -28,22 +28,22 @@ cglobal vert_classify, 3, 5, 7;,src, stride, context, tmp1, tmp2
 ;; I assume the mmx_dc_offset and mmx_dc_threshold will need to be changed
 ;; for sse2/avx2 code, as in the commented out code below
 ; %if cpuflag(avx2)
-;     lea r4, [r3 + PPContext.nonBQP * 4];assuming 256 bit elements
+;     lea r3, [r2 + PPContext.nonBQP * 4];assuming 256 bit elements
 ; %elif cpuflag(sse2)
-;     lea r4, [r3 + PPContext.nonBQP * 2];assuming 128 bit elements
+;     lea r3, [r2 + PPContext.nonBQP * 2];assuming 128 bit elements
 ; %else ;this is how the code currently is
-    lea r4, [r3 + PPContext.nonBQP]
+    lea r3, [r2 + PPContext.nonBQP]
 ;%endif
-    lea r5, [r3 + PPContext.mmx_dc_offset]
-    movq m7, [r5 + r4 * 8]
-    lea r5, [r3 + PPContext.mmx_dc_threshold]
-    movq m6, [r5 + r4 * 8]
+    lea r4, [r2 + PPContext.mmx_dc_offset]
+    movq m7, [r4 + r3 * 8]
+    lea r4, [r2 + PPContext.mmx_dc_threshold]
+    movq m6, [r4 + r3 * 8]
     dup_low_quadword m6
     dup_low_quadword m7
 
-    lea r4, [r1 + r2]
-    mova m0, [r1]
-    mova m1, [r4]
+    lea r3, [r0 + r1]
+    mova m0, [r0]
+    mova m1, [r3]
     mova m3, m0
     mova m4, m0
 ;; m0 keeps a tally of which lines differ (by at least mmx_dc_threshold)
@@ -55,7 +55,7 @@ cglobal vert_classify, 3, 5, 7;,src, stride, context, tmp1, tmp2
     pcmpgtb m0, m6
 
 
-    mova m2, [r4 + r2]
+    mova m2, [r3 + r1]
 %macro do_line 2
     pmaxub m4, %1
     pminub m3, %1
@@ -66,20 +66,20 @@ cglobal vert_classify, 3, 5, 7;,src, stride, context, tmp1, tmp2
 %endmacro
     do_line m2, m1
 
-    mova m1, [r4 + r2 * 2]
+    mova m1, [r3 + r1 * 2]
     do_line m1, m2
 
-    lea r4, [r4 + r2 * 4]
-    mova m2, [r1 + r2 * 4]
+    lea r3, [r3 + r1 * 4]
+    mova m2, [r0 + r1 * 4]
     do_line m2, m1
 
-    mova m1, [r4]
+    mova m1, [r3]
     do_line m1, m2
 
-    mova m2, [r4 + r2]
+    mova m2, [r3 + r1]
     do_line m2, m1
 
-    mova m1, [r4 + r2 * 2]
+    mova m1, [r3 + r1 * 2]
 
     do_line m1, m2
     psubusb m4, m3 ;substract w/unsigned saturation
@@ -87,7 +87,7 @@ cglobal vert_classify, 3, 5, 7;,src, stride, context, tmp1, tmp2
 ;; compute the sum of absolute diferences of each 8 bytes, and store the results
 ;; into the low 16 bits of each 64 bit section
     psadbw m0, m7
-    movq m7, [r3 + PPContext.pQPb]
+    movq m7, [r2 + PPContext.pQPb]
 ;; copy low quadword to upper quadword(s)
     dup_low_quadword m7
     paddusb m7, m7
@@ -99,7 +99,7 @@ cglobal vert_classify, 3, 5, 7;,src, stride, context, tmp1, tmp2
 ;; Is there a better way to negate a simd register?
     psub m0, m3
     pand m0, m1 ; now m0 = -m0 & 0xff...
-    movd m2, [r3 + (PPContext.ppMode + PPMode.flatness_threshold)]
+    movd m2, [r2 + (PPContext.ppMode + PPMode.flatness_threshold)]
 ;; This should  the low 32 bits of each 64 bit element in m2 to the restult
 ;; of the above instruction I'm not entierly sure this will work b/c of endianess
     dup_low_quadword m2

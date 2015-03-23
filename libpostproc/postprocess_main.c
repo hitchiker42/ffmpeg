@@ -72,7 +72,7 @@ static void postProcess(const uint8_t src[], int srcStride, uint8_t dst[], int d
     for(i=0; i<57; i++){
         int offset= ((i*c.ppMode.baseDcDiff)>>8) + 1;
         int threshold= offset*2 + 1;
-        for(j = 0;j < block_width/8; j++){
+        for(j = 0;j < BLOCK_SIZE/8; j++){
           c.mmxDcOffset[i][j]= 0x7F - offset;
           c.mmxDcThreshold[i][j]= 0x7F - threshold;
           c.mmxDcOffset[i][j]*= 0x0101010101010101LL;
@@ -131,6 +131,10 @@ static void postProcess(const uint8_t src[], int srcStride, uint8_t dst[], int d
 #if ARCH_X86
         c.packedYScale[0]= (uint16_t)(scale*256.0 + 0.5);
         c.packedYOffset[0]= (((black*c.packedYScale)>>8) - c.ppMode.minAllowedY) & 0xFFFF;
+#else
+        c.packedYScale= (uint16_t)(scale*1024.0 + 0.5);
+        c.packedYOffset= (black - c.ppMode.minAllowedY) & 0xFFFF;
+#endif
 
         c.packedYOffset[0]|= c.packedYOffset<<32;
         c.packedYOffset[0]|= c.packedYOffset<<16;
@@ -140,19 +144,12 @@ static void postProcess(const uint8_t src[], int srcStride, uint8_t dst[], int d
 
         c.packedYScale[1] = c.packedYScale[2] = c.packedYScale[3] = c.packedYScale[0];
         c.packedYOffset[1] = c.packedYOffset[2] = c.packedYOffset[3] = c.packedYOffset[0];
-#else
-        c.packedYScale= (uint16_t)(scale*1024.0 + 0.5);
-        c.packedYOffset= (black - c.ppMode.minAllowedY) & 0xFFFF;
 
-        c.packedYOffset|= c.packedYOffset<<32;
-        c.packedYOffset|= c.packedYOffset<<16;
-
-        c.packedYScale|= c.packedYScale<<32;
-        c.packedYScale|= c.packedYScale<<16;
-#endif
-
-        if(mode & LEVEL_FIX)        QPCorrecture= (int)(scale*256*256 + 0.5);
-        else                        QPCorrecture= 256*256;
+        if(mode & LEVEL_FIX){
+          QPCorrecture= (int)(scale*256*256 + 0.5);
+        } else {
+          QPCorrecture= 256*256;
+        }
     } else {
 #if ARCH_X86
         c.packedYScale= {0x0100010001000100LL,0x0100010001000100LL,
@@ -166,22 +163,23 @@ static void postProcess(const uint8_t src[], int srcStride, uint8_t dst[], int d
     }
 
     /* copy & deinterlace first row of blocks */
-    y=-block_height;
+    y=-BLOCK_SIZE;
     {
         const uint8_t *srcBlock= &(src[y*srcStride]);
         uint8_t *dstBlock= tempDst + dstStride;
 
-        for(x=0; x<width; x+=block_width){
+        for(x=0; x<width; x+=c.block_width){
             prefetchnta(srcBlock + (((x>>2)&6) + 5)*srcStride + 32);
             prefetchnta(srcBlock + (((x>>2)&6) + 6)*srcStride + 32);
             prefetcht0(dstBlock + (((x>>2)&6) + 5)*dstStride + 32);
             prefetcht0(dstBlock + (((x>>2)&6) + 6)*dstStride + 32);
 
+//need to pass context/width and height to these next two
             RENAME(blockCopy)(dstBlock + dstStride*8, dstStride,
                               srcBlock + srcStride*8, srcStride, mode & LEVEL_FIX, &c.packedYOffset);
 
             RENAME(duplicate)(dstBlock + dstStride*8, dstStride);
-//move these checks outh of the inner loop
+//move these checks out of the inner loop
             if(mode & LINEAR_IPOL_DEINT_FILTER)
                 RENAME(deInterlaceInterpolateLinear)(dstBlock, dstStride);
             else if(mode & LINEAR_BLEND_DEINT_FILTER)
@@ -210,19 +208,19 @@ static void postProcess(const uint8_t src[], int srcStride, uint8_t dst[], int d
         }
     }
 
-    for(y=0; y<height; y+=block_height){
+    for(y=0; y<height; y+=BLOCK_SIZE){
         //1% speedup if these are here instead of the inner loop
         const uint8_t *srcBlock= &(src[y*srcStride]);
         uint8_t *dstBlock= &(dst[y*dstStride]);
 #if ARCH_X86
         uint8_t *tempBlock1= c.tempBlocks;
-        uint8_t *tempBlock2= c.tempBlocks + 8;
+        uint8_t *tempBlock2= c.tempBlocks + c.block_height;
 #endif
         const int8_t *QPptr= &QPs[(y>>qpVShift)*QPStride];
         int8_t *nonBQPptr= &c.nonBQPTable[(y>>qpVShift)*FFABS(QPStride)];
-        int QP=0;
         /* can we mess with a 8x16 block from srcBlock/dstBlock downwards and 1 line upwards
            if not than use a temporary buffer */
+//change loop parameters and move this
         if(y+15 >= height){
             int i;
             /* copy from line (copyAhead) to (copyAhead+7) of src, these will be copied with
@@ -248,31 +246,51 @@ static void postProcess(const uint8_t src[], int srcStride, uint8_t dst[], int d
         // From this point on it is guaranteed that we can read and write 16 lines downward
         // finish 1 block before the next otherwise we might have a problem
         // with the L1 Cache of the P4 ... or only a few blocks at a time or something
-        for(x=0; x<width; x+=block_width){
+        //either mandate width is a multiple of block_width or figure
+        //out a way to deal with the excess
+        for(x=0; x<width; x+=c.block_width){
             const int stride= dstStride;
 #if ARCH_X86
             uint8_t *tmpXchg;
 #endif
-            if(isColor){
-                QP= QPptr[x>>qpHShift];
-                c.nonBQP= nonBQPptr[x>>qpHShift];
-            }else{
-                QP= QPptr[x>>4];
-                QP= (QP* QPCorrecture + 256*128)>>16;
-                c.nonBQP= nonBQPptr[x>>4];
-                c.nonBQP= (c.nonBQP* QPCorrecture + 256*128)>>16;
-                yHistogram[ srcBlock[srcStride*12 + 4] ]++;
-            }
-            c.QP= QP;
+            int i;
+            for(i=0; i < c.block_width/8; i+=8){
+              int j = i/8;
+              if(isColor){
+                c.QP[j]= QPptr[(x+i)>>qpHShift];
+                c.nonBQP[j]= nonBQPptr[(x+i)x>>qpHShift];
+              }else{
+                QP[j]= QPptr[(x+i)>>4];
+                QP[j]= (QP[j] * QPCorrecture + 256*128)>>16;
+                c.nonBQP[j]= nonBQPptr[(x+i)>>4];
+                c.nonBQP[j]= (c.nonBQP[i]* QPCorrecture + 256*128)>>16;
+                yHistogram[srcBlock[srcStride*12 + 4]]++;
+              }
 #if ARCH_X86
-            __asm__ volatile(
-                "movd %1, %%mm7         \n\t"
-                "packuswb %%mm7, %%mm7  \n\t" // 0, 0, 0, QP, 0, 0, 0, QP
-                "packuswb %%mm7, %%mm7  \n\t" // 0,QP, 0, QP, 0,QP, 0, QP
-                "packuswb %%mm7, %%mm7  \n\t" // QP,..., QP
-                "movq %%mm7, %0         \n\t"
-                : "=m" (c.pQPb)
-                : "r" (QP)
+#if AV_CPU_FLAG_AVX2
+//I know, inline avx, but it's just a couple lines
+//assumes QP is an int64_t*, will need to be modified slightly
+              __asm__ volatile(
+                               "vmovdqa %1, %%ymm0\n\t"
+                               "vshufb %1,%1,%2\n\t"
+                               "vmovdqa %1,%0\n\t"
+                               : "=m"(c.pQPb)
+                               : "g"(QP), "g"(shuffle_const)
+              );
+#elif AV_CPU_FLAG_SSSE3
+              //same type of shuffle
+#elif AV_CPU_FLAG_SSE2
+              //punpcklbw
+              //punpcklwd
+              //pshufd
+#else //mmx
+              __asm__ volatile(
+                               "movd %1, %%mm7         \n\t"
+                               "punpkclbw %%mm7, %%mm7  \n\t" // 0, 0, 0, 0, 0, 0, QP, QP
+                               "pshufw %%mm7, %%mm7, 0  \n\t" // QP, ..., QP
+                               "movq %%mm7, %0         \n\t"
+                                 : "=m" (c.pQPb)
+                                 : "r" (QP)
             );
 #endif
 
@@ -285,6 +303,7 @@ static void postProcess(const uint8_t src[], int srcStride, uint8_t dst[], int d
             RENAME(blockCopy)(dstBlock + dstStride*copyAhead, dstStride,
                               srcBlock + srcStride*copyAhead, srcStride, mode & LEVEL_FIX, &c.packedYOffset);
 
+//move these checks out of the loop
             if(mode & LINEAR_IPOL_DEINT_FILTER)
                 RENAME(deInterlaceInterpolateLinear)(dstBlock, dstStride);
             else if(mode & LINEAR_BLEND_DEINT_FILTER)
