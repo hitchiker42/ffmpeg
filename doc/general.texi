@@ -466,6 +466,7 @@ library:
 @item SoX native format         @tab X @tab X
 @item SUN AU format             @tab X @tab X
 @item SUP raw PGS subtitles     @tab   @tab X
+@item TDSC                      @tab   @tab X
 @item Text files                @tab   @tab X
 @item THP                       @tab   @tab X
     @tab Used on the Nintendo GameCube.
@@ -905,6 +906,7 @@ following image formats are supported:
 @item COOK                   @tab     @tab  X
     @tab All versions except 5.1 are supported.
 @item DCA (DTS Coherent Acoustics)  @tab  X  @tab  X
+    @tab supported extensions: XCh, XLL (partially)
 @item DPCM id RoQ            @tab  X  @tab  X
     @tab Used in Quake III, Jedi Knight 2 and other computer games.
 @item DPCM Interplay         @tab     @tab  X

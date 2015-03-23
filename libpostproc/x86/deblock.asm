@@ -1,6 +1,6 @@
 ;******************************************************************************
 ;*
-;* Copyright (c) 2015 Tucker DiNapoli
+;* Copyright (c) 2015 Tucker DiNapoli (T.DiNapoli42 at gmail.com)
 ;*
 ;* Utility code/marcos used in asm files for libpostproc
 ;*
@@ -45,8 +45,9 @@ cglobal do_a_deblock, 5, 7, 7 ;src, step, stride, ppcontext, mode
     lea r1, [r1 + r2*2]
     add r1, r2
 
-    mov m7, [(r4 + PPContext.mmx_dc_offset) + (r4 + PPContext.nonBQP) * 8]
-    mov m6, [(r4 + PPContext.mmx_dc_threshold) + (r4 + PPContext.nonBQP) * 8]
+    mova m7, [(r4 + PPContext.mmx_dc_offset) + (r4 + PPContext.nonBQP) * 8]
+    mova m6, [(r4 + PPContext.mmx_dc_threshold) + (r4 + PPContext.nonBQP) * 8]
+
 
     lea r6, [r1 + r2]
     mova m0, [r1]
@@ -93,17 +94,21 @@ cglobal do_a_deblock, 5, 7, 7 ;src, step, stride, ppcontext, mode
     mova [rsp + 21*mmsize], m7; dc_mask
 
     mova m7, [r4 + PPContext.ppMode + PPMode.flatness_threshold]
-    dup_low_byte m7
+
+    dup_low_byte m7, m6
+%if cpuflag(ssse3)
+    pxor m6,m6
+%endif
+
     psubb m6, m0
     pcmpgtb m6, m7
     mova [rsp + 20*mmsize], m6; eq_mask
 
-;;    ptest m6, [rsp + 21*mmsize]
-    pcmpeqb  m6, [rsp + 21*mmsize]
-    pmovmskb r6, m6
-    test r6, r6
+    ptest_neq m6, [rsp + 21*mmsize], r6, r7
+
     ;; if eq_mask & dc_mask == 0 jump to .skip
-    jnz .skip
+    jz .skip
+
     lea r6, [r2 * 8]
     neg r6 ;;r6 == offset
     mov r7, r1
@@ -279,13 +284,17 @@ cglobal do_a_deblock, 5, 7, 7 ;src, step, stride, ppcontext, mode
     add r1, r2
 
 .test:
-    pcmpeqb m6, m6;;may change this register
-    ptest m6, [rsp + 20*mmsize]
+;; if eq_mask is all 1s jump to the end
+    pcmpeqb m6, m6
+    ptest_eq m6, [rsp + 20*mmsize], r6, r7
+
     jc .end
 
     mov r7, r1
     pxor m7, m7
-    mova m0, r1
+
+    mova m0, [r1]
+
     mova m1, m0
     punpcklbw m0, m7 ;low part of line 0, as words
     punpckhbw m1, m7 ;high ''                    ''

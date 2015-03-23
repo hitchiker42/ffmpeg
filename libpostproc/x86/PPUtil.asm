@@ -25,6 +25,7 @@
 ;; Macros to simplify moving packed data
 
 ;; copy low quadword to upper quadword(s)
+;; no-op for mmx
 %macro dup_low_quadword 1
 %if cpuflag(sse2)
     pshufpd %1, %1, 0x00
@@ -34,6 +35,28 @@
 %endmacro
 
 %macro dup_low_byte 1
+    vpermq %1, %1, 0x00
+%endif
+%endmacro
+;; copy low byte into all other bytes
+%macro dup_low_byte 1-2
+%if cpuflag(avx2)
+;; avx shuffle instructions generally act on the lower 128 and upper 128 bits
+;; independently, so we need to copy the lower 128 bits to the upper 128 bits
+    vpermq %1,%1,0x00
+%endif
+%if cpuflag(ssse3)&& %0 == 2
+    pxor %2,%2
+    pshufb %1,%2
+%else
+    punpcklbw %1, %1
+%if cpuflag(sse2)
+    pshuflw %1,%1, 0x00
+    pshufd %1,%2, 0x00
+%else ;; mmx
+    pshufw %1,%1, 0x00
+%endif
+%endif
 %endmacro
 ;; move the low half of the mmx/xmm/ymm register in %2 into %1
 ;; %1 should be a memory location
@@ -196,11 +219,47 @@ cglobal block_copy, 6, 6, 8
 .end:
     REP_RET
 %endmacro
-;; emulate the ptest instruction from sse41 for earlier cpus
-;; the operation is:
-;; if src = ~dst then set zf; if src == dst then set cf
-;;%macro ptest_generic 3 ;; dst, src, tmp, tmp is a general purpose register
-;;%if cpuflag(sse41)
+
+
+;; Macros to emulate the ptest instruction for pre-sse41 cpus
+;; Used to allow branching based on the values of simd registers
+;; set zf if dst & src == 0
+%macro ptest_neq 2-4 ;; dst, src, tmp1, tmp2 ; tmp1,2 are  general purpose registers
+%if cpuflag(sse4)
+    ptest %1, %2
+%elif cpuflag(sse)
+    pcmpeqb %1, %2
+    pmovmskb %3, %1
+    test %3, %3
+%else ;;mmx
+    pand %1, %2
+    movd %3, %1
+    psrlq %1, 32
+    movd %4, %1
+;; we just need to test if any of the bits are set so we can fold the
+;; two 32 bit halves together
+    or %3, %4
+    test %3, %3
+%endif
+%endmacro
+;; set cf if dst & ~src == 0 (i.e dst == src)
+%macro ptest_eq 2-4 ;;dst, src, tmp1, tmp1 ;tmp1,2 are general purpose registers
+%if cpuflag(sse4)
+    ptest %1, %2
+%elif cpuflag(sse)
+    pcmpeqb %1, %2
+    pmovmskb %3, %1
+    neg %3 ;;sets cf if operand is non-zero
+%else ;;mmx
+    pand %1, %2
+    movd %3, %1
+    psrlq %1, 32
+    movd %4, %1
+    or %3, %4
+    neg %3
+%endif
+%endmacro
+
 ;; cglobal transpose_block, 4, 6, 7 ;src, src_stride, dst, dst_stride
 ;;     lea r5, [r3 + 4*r4]
 ;; 

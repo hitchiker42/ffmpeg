@@ -163,13 +163,13 @@ follow the same constraints order of the previous point. The following
 
 If the option value itself is a list of items (e.g. the @code{format} filter
 takes a list of pixel formats), the items in the list are usually separated by
-'|'.
+@samp{|}.
 
-The list of arguments can be quoted using the character "'" as initial
-and ending mark, and the character '\' for escaping the characters
+The list of arguments can be quoted using the character @samp{'} as initial
+and ending mark, and the character @samp{\} for escaping the characters
 within the quoted text; otherwise the argument string is considered
 terminated when the next special character (belonging to the set
-"[]=;,") is encountered.
+@samp{[]=;,}) is encountered.
 
 The name and arguments of the filter are optionally preceded and
 followed by a list of link labels.
@@ -4149,7 +4149,7 @@ If @option{expansion} is set to @code{none}, the text is printed verbatim.
 If @option{expansion} is set to @code{normal} (which is the default),
 the following expansion mechanism is used.
 
-The backslash character '\', followed by any character, always expands to
+The backslash character @samp{\}, followed by any character, always expands to
 the second character.
 
 Sequence of the form @code{%@{...@}} are expanded. The text between the
@@ -4181,8 +4181,9 @@ value.
 Evaluate the expression's value and output as formatted integer.
 
 The first argument is the expression to be evaluated, just as for the @var{expr} function.
-The second argument specifies the output format. Allowed values are 'x', 'X', 'd' and
-'u'. They are treated exactly as in the printf function.
+The second argument specifies the output format. Allowed values are @samp{x},
+@samp{X}, @samp{d} and @samp{u}. They are treated exactly as in the
+@code{printf} function.
 The third parameter is optional and sets the number of positions taken by the output.
 It can be used to add padding with zeros from the left.
 
@@ -4366,40 +4367,72 @@ The filter accepts the following options:
 
 @table @option
 @item contrast
-Set the contrast value. It accepts a float value in range @code{-2.0} to
-@code{2.0}. The default value is @code{0.0}.
+Set the contrast expression. The value must be a float value in range
+@code{-2.0} to @code{2.0}. The default value is "0".
 
 @item brightness
-Set the brightness value. It accepts a float value in range @code{-1.0} to
-@code{1.0}. The default value is @code{0.0}.
+Set the brightness expression. The value must be a float value in
+range @code{-1.0} to @code{1.0}. The default value is "0".
 
 @item saturation
-Set the saturation value. It accepts a float value in range @code{0.0} to
-@code{3.0}. The default value is @code{1.0}.
+Set the saturation expression. The value must be a float in
+range @code{0.0} to @code{3.0}. The default value is "1".
 
 @item gamma
-Set the gamma value. It accepts a float value in range @code{0.1} to @code{10.0}.
-The default value is @code{1.0}.
+Set the gamma expression. The value must be a float in range
+@code{0.1} to @code{10.0}.  The default value is "1".
 
 @item gamma_r
-Set the gamma value for red. It accepts a float value in range
-@code{0.1} to @code{10.0}. The default value is @code{1.0}.
+Set the gamma expression for red. The value must be a float in
+range @code{0.1} to @code{10.0}. The default value is "1".
 
 @item gamma_g
-Set the gamma value for green. It accepts a float value in range
-@code{0.1} to @code{10.0}. The default value is @code{1.0}.
+Set the gamma expression for green. The value must be a float in range
+@code{0.1} to @code{10.0}. The default value is "1".
 
 @item gamma_b
-Set the gamma value for blue. It accepts a float value in range
-@code{0.1} to @code{10.0}. The default value is @code{1.0}.
+Set the gamma expression for blue. The value must be a float in range
+@code{0.1} to @code{10.0}. The default value is "1".
 
 @item gamma_weight
-Can be used to reduce the effect of a high gamma value on bright image areas,
-e.g. keep them from getting overamplified and just plain white. It accepts a
-float value in range @code{0.0} to @code{1.0}.A value of @code{0.0} turns the
-gamma correction all the way down while @code{1.0} leaves it at its full strength.
-Default is @code{1.0}.
+Set the gamma weight expression. It can be used to reduce the effect
+of a high gamma value on bright image areas, e.g. keep them from
+getting overamplified and just plain white. The value must be a float
+in range @code{0.0} to @code{1.0}. A value of @code{0.0} turns the
+gamma correction all the way down while @code{1.0} leaves it at its
+full strength. Default is "1".
 
+@item eval
+Set when the expressions for brightness, contrast, saturation and
+gamma expressions are evaluated.
+
+It accepts the following values:
+@table @samp
+@item init
+only evaluate expressions once during the filter initialization or
+when a command is processed
+
+@item frame
+evaluate expressions for each incoming frame
+@end table
+
+Default value is @samp{init}.
+@end table
+
+The expressions accept the following parameters:
+@table @option
+@item n
+frame count of the input frame starting from 0
+
+@item pos
+byte position of the corresponding packet in the input file, NAN if
+unspecified
+
+@item r
+frame rate of the input video, NAN if the input frame rate is unknown
+
+@item t
+timestamp expressed in seconds, NAN if the input timestamp is unknown
 @end table
 
 @subsection Commands
@@ -11738,6 +11771,33 @@ Create a synthetic signal and show it with showwaves, forcing a
 frame rate of 30 frames per second:
 @example
 aevalsrc=sin(1*2*PI*t)*sin(880*2*PI*t):cos(2*PI*200*t),asplit[out0],showwaves=r=30[out1]
+@end example
+@end itemize
+
+@section showwavespic
+
+Convert input audio to a single video frame, representing the samples waves.
+
+The filter accepts the following options:
+
+@table @option
+@item size, s
+Specify the video size for the output. For the syntax of this option, check the
+@ref{video size syntax,,"Video size" section in the ffmpeg-utils manual,ffmpeg-utils}.
+Default value is @code{600x240}.
+
+@item split_channels
+Set if channels should be drawn separately or overlap. Default value is 0.
+@end table
+
+@subsection Examples
+
+@itemize
+@item
+Extract a channel split representation of the wave form of a whole audio track
+in a 1024x800 picture using @command{ffmpeg}:
+@example
+ffmpeg -i audio.flac -lavfi showwavespic=split_channels=1:s=1024x800 waveform.png
 @end example
 @end itemize
 

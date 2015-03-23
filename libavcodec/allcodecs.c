@@ -269,6 +269,7 @@ void avcodec_register_all(void)
     REGISTER_DECODER(SVQ3,              svq3);
     REGISTER_ENCDEC (TARGA,             targa);
     REGISTER_DECODER(TARGA_Y216,        targa_y216);
+    REGISTER_DECODER(TDSC,              tdsc);
     REGISTER_DECODER(THEORA,            theora);
     REGISTER_DECODER(THP,               thp);
     REGISTER_DECODER(TIERTEXSEQVIDEO,   tiertexseqvideo);
@@ -511,6 +512,7 @@ void avcodec_register_all(void)
 
     /* external libraries */
     REGISTER_DECODER(LIBCELT,           libcelt);
+    REGISTER_DECODER(LIBDCADEC,         libdcadec)
     REGISTER_ENCODER(LIBFAAC,           libfaac);
     REGISTER_ENCDEC (LIBFDK_AAC,        libfdk_aac);
     REGISTER_ENCDEC (LIBGSM,            libgsm);

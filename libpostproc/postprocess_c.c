@@ -32,7 +32,7 @@ static inline int isHorizDC_C(const uint8_t src[], int stride, const PPContext *
     const int dcOffset= ((c->nonBQP*c->ppMode.baseDcDiff)>>8) + 1;
     const int dcThreshold= dcOffset*2 + 1;
 
-    for(y=0; y<block_height; y++){
+    for(y=0; y<BLOCK_SIZE; y++){
         numEq += ((unsigned)(src[0] - src[1] + dcOffset)) < dcThreshold;
         numEq += ((unsigned)(src[1] - src[2] + dcOffset)) < dcThreshold;
         numEq += ((unsigned)(src[2] - src[3] + dcOffset)) < dcThreshold;
@@ -56,7 +56,7 @@ static inline int isVertDC_C(const uint8_t src[], int stride, const PPContext *c
     const int dcThreshold= dcOffset*2 + 1;
 
     src+= stride*4; // src points to begin of the 8x8 Block
-    for(y=0; y<block_height-1; y++){
+    for(y=0; y<BLOCK_SIZE-1; y++){
         numEq += ((unsigned)(src[0] - src[0+stride] + dcOffset)) < dcThreshold;
         numEq += ((unsigned)(src[1] - src[1+stride] + dcOffset)) < dcThreshold;
         numEq += ((unsigned)(src[2] - src[2+stride] + dcOffset)) < dcThreshold;
@@ -90,7 +90,7 @@ static inline int isVertMinMaxOk_C(const uint8_t src[], int stride, int QP)
 {
     int x;
     src+= stride*4;
-    for(x=0; x<block_width; x+=4){
+    for(x=0; x<BLOCK_SIZE; x+=4){
         if((unsigned)(src[  x + 0*stride] - src[  x + 5*stride] + 2*QP) > 4*QP) return 0;
         if((unsigned)(src[1+x + 2*stride] - src[1+x + 7*stride] + 2*QP) > 4*QP) return 0;
         if((unsigned)(src[2+x + 4*stride] - src[2+x + 1*stride] + 2*QP) > 4*QP) return 0;
@@ -120,7 +120,7 @@ static inline int vertClassify_C(const uint8_t src[], int stride, const PPContex
 static inline void doHorizDefFilter_C(uint8_t dst[], int stride, const PPContext *c)
 {
     int y;
-    for(y=0; y<block_height; y++){
+    for(y=0; y<BLOCK_SIZE; y++){
         const int middleEnergy= 5*(dst[4] - dst[3]) + 2*(dst[2] - dst[5]);
 
         if(FFABS(middleEnergy) < 8*c->QP){
@@ -159,7 +159,7 @@ static inline void doHorizDefFilter_C(uint8_t dst[], int stride, const PPContext
 static inline void doHorizLowPass_C(uint8_t dst[], int stride, const PPContext *c)
 {
     int y;
-    for(y=0; y<block_height; y++){
+    for(y=0; y<BLOCK_SIZE; y++){
         const int first= FFABS(dst[-1] - dst[0]) < c->QP ? dst[-1] : dst[0];
         const int last= FFABS(dst[8] - dst[7]) < c->QP ? dst[8] : dst[7];
 
@@ -229,7 +229,7 @@ static inline void horizX1Filter(uint8_t *src, int stride, int QP)
         }
     }
 
-    for(y=0; y<block_height; y++){
+    for(y=0; y<BLOCK_SIZE; y++){
         int a= src[1] - src[2];
         int b= src[3] - src[4];
         int c= src[5] - src[6];
@@ -392,7 +392,7 @@ static inline void doVertLowPass_C(uint8_t *src, int stride, PPContext *c)
     const int l9= stride + l8;
     int x;
     src+= stride*3;
-    for(x=0; x<block_width; x++){
+    for(x=0; x<BLOCK_SIZE; x++){
         const int first= FFABS(src[0] - src[l1]) < c->QP ? src[0] : src[l1];
         const int last= FFABS(src[l8] - src[l9]) < c->QP ? src[l9] : src[l8];
 
@@ -443,7 +443,7 @@ static inline void vertX1Filter_C(uint8_t *src, int stride, PPContext *co)
     int x;
 
     src+= stride*3;
-    for(x=0; x<block_width; x++){
+    for(x=0; x<BLOCK_SIZE; x++){
         int a= src[l3] - src[l4];
         int b= src[l4] - src[l5];
         int c= src[l5] - src[l6];
@@ -478,7 +478,7 @@ static inline void doVertDefFilter_C(uint8_t src[], int stride, PPContext *c)
 //    const int l9= stride + l8;
     int x;
     src+= stride*3;
-    for(x=0; x<block_width; x++){
+    for(x=0; x<BLOCK_SIZE; x++){
         const int middleEnergy= 5*(src[l5] - src[l4]) + 2*(src[l3] - src[l6]);
         if(FFABS(middleEnergy) < 8*c->QP){
             const int q=(src[l4] - src[l5])/2;
@@ -881,13 +881,13 @@ static inline void blockCopy_C(uint8_t dst[], int dstStride, const uint8_t src[]
 {
     int i;
     if(levelFix){
-    for(i=0; i<block_height; i++)
+    for(i=0; i<8; i++)
         memcpy( &(dst[dstStride*i]),
-                &(src[srcStride*i]), block_width);
+                &(src[srcStride*i]), BLOCK_SIZE);
     }else{
-    for(i=0; i<block_height; i++)
+    for(i=0; i<8; i++)
         memcpy( &(dst[dstStride*i]),
-                &(src[srcStride*i]), block_width);
+                &(src[srcStride*i]), BLOCK_SIZE);
     }
 }
 
@@ -999,7 +999,7 @@ static void postProcess_C(const uint8_t src[], int srcStride, uint8_t dst[], int
     }
 
     /* copy & deinterlace first row of blocks */
-    y=-block_height;
+    y=-BLOCK_SIZE;
     {
         const uint8_t *srcBlock= &(src[y*srcStride]);
         uint8_t *dstBlock= tempDst + dstStride;
@@ -1007,7 +1007,7 @@ static void postProcess_C(const uint8_t src[], int srcStride, uint8_t dst[], int
         // From this point on it is guaranteed that we can read and write 16 lines downward
         // finish 1 block before the next otherwise we might have a problem
         // with the L1 Cache of the P4 ... or only a few blocks at a time or something
-        for(x=0; x<width; x+=block_width){
+        for(x=0; x<width; x+=BLOCK_SIZE){
 
 
             blockCopy_C(dstBlock + dstStride*8, dstStride,
@@ -1043,7 +1043,7 @@ static void postProcess_C(const uint8_t src[], int srcStride, uint8_t dst[], int
         }
     }
 
-    for(y=0; y<height; y+=block_height){
+    for(y=0; y<height; y+=BLOCK_SIZE){
         //1% speedup if these are here instead of the inner loop
         const uint8_t *srcBlock= &(src[y*srcStride]);
         uint8_t *dstBlock= &(dst[y*dstStride]);
@@ -1077,7 +1077,7 @@ static void postProcess_C(const uint8_t src[], int srcStride, uint8_t dst[], int
         // From this point on it is guaranteed that we can read and write 16 lines downward
         // finish 1 block before the next otherwise we might have a problem
         // with the L1 Cache of the P4 ... or only a few blocks at a time or something
-        for(x=0; x<width; x+=block_width){
+        for(x=0; x<width; x+=BLOCK_SIZE){
             const int stride= dstStride;
             if(isColor){
                 QP= QPptr[x>>qpHShift];

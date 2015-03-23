@@ -210,6 +210,7 @@ External library support:
   --enable-libcdio         enable audio CD grabbing with libcdio [no]
   --enable-libdc1394       enable IIDC-1394 grabbing using libdc1394
                            and libraw1394 [no]
+  --enable-libdcadec       enable DCA decoding via libdcadec [no]
   --enable-libfaac         enable AAC encoding via libfaac [no]
   --enable-libfdk-aac      enable AAC de/encoding via libfdk-aac [no]
   --enable-libflite        enable flite (voice synthesis) support via libflite [no]
@@ -1353,6 +1354,7 @@ EXTERNAL_LIBRARY_LIST="
     libcdio
     libcelt
     libdc1394
+    libdcadec
     libfaac
     libfdk_aac
     libflite
@@ -1481,7 +1483,6 @@ SUBSYSTEM_LIST="
     mdct
     pixelutils
     network
-    qsv
     rdft
 "
 
@@ -1889,6 +1890,7 @@ CONFIG_EXTRA="
     nettle
     pixblockdsp
     qpeldsp
+    qsv
     rangecoder
     riffdec
     riffenc
@@ -2231,6 +2233,7 @@ svq1_encoder_select="aandcttables hpeldsp me_cmp mpegvideoenc"
 svq3_decoder_select="h264_decoder hpeldsp tpeldsp"
 svq3_decoder_suggest="zlib"
 tak_decoder_select="audiodsp"
+tdsc_decoder_select="zlib mjpeg_decoder"
 theora_decoder_select="vp3_decoder"
 thp_decoder_select="mjpeg_decoder"
 tiff_decoder_suggest="zlib lzma"
@@ -2358,6 +2361,7 @@ vc1_parser_select="mpegvideo startcode vc1_decoder"
 # external libraries
 libaacplus_encoder_deps="libaacplus"
 libcelt_decoder_deps="libcelt"
+libdcadec_decoder_deps="libdcadec"
 libfaac_encoder_deps="libfaac"
 libfaac_encoder_select="audio_frame_queue"
 libfdk_aac_decoder_deps="libfdk_aac"
@@ -2994,13 +2998,6 @@ disabled logging && logfile=/dev/null
 echo "# $0 $FFMPEG_CONFIGURATION" > $logfile
 set >> $logfile
 
-test -n "$cross_prefix" && enable cross_compile
-
-if enabled cross_compile; then
-    test -n "$arch" && test -n "$target_os" ||
-        die "Must specify target arch and OS when cross-compiling"
-fi
-
 test -n "$valgrind" && toolchain="valgrind-memcheck"
 
 case "$toolchain" in
@@ -3086,6 +3083,13 @@ case "$toolchain" in
         die "Unknown toolchain $toolchain"
     ;;
 esac
+
+test -n "$cross_prefix" && enable cross_compile
+
+if enabled cross_compile; then
+    test -n "$arch" && test -n "$target_os" ||
+        die "Must specify target arch and OS when cross-compiling"
+fi
 
 ar_default="${cross_prefix}${ar_default}"
 cc_default="${cross_prefix}${cc_default}"
@@ -3256,8 +3260,8 @@ msvc_flags(){
             -Wall)                echo -W4 -wd4244 -wd4127 -wd4018 -wd4389     \
                                        -wd4146 -wd4057 -wd4204 -wd4706 -wd4305 \
                                        -wd4152 -wd4324 -we4013 -wd4100 -wd4214 \
-                                       -wd4554 \
-                                       -wd4273 -wd4701 ;;
+                                       -wd4307 \
+                                       -wd4273 -wd4554 -wd4701 ;;
         esac
     done
 }
@@ -3750,6 +3754,7 @@ elif enabled arm; then
         elif check_arm_arch 6T2;      then echo armv6t2;
         elif check_arm_arch 7;        then echo armv7;
         elif check_arm_arch 7A  7_A;  then echo armv7-a;
+        elif check_arm_arch 7S;       then echo armv7-a;
         elif check_arm_arch 7R  7_R;  then echo armv7-r;
         elif check_arm_arch 7M  7_M;  then echo armv7-m;
         elif check_arm_arch 7EM 7E_M; then echo armv7-m;
@@ -4921,6 +4926,7 @@ enabled libcelt           && require libcelt celt/celt.h celt_decode -lcelt0 &&
                              { check_lib celt/celt.h celt_decoder_create_custom -lcelt0 ||
                                die "ERROR: libcelt must be installed and version must be >= 0.11.0."; }
 enabled libcaca           && require_pkg_config caca caca.h caca_create_canvas
+enabled libdcadec         && require libdcadec libdcadec/dca_context.h dcadec_context_create -ldcadec
 enabled libfaac           && require2 libfaac "stdint.h faac.h" faacEncGetVersion -lfaac
 enabled libfdk_aac        && require libfdk_aac fdk-aac/aacenc_lib.h aacEncOpen -lfdk-aac
 flite_libs="-lflite_cmu_time_awb -lflite_cmu_us_awb -lflite_cmu_us_kal -lflite_cmu_us_kal16 -lflite_cmu_us_rms -lflite_cmu_us_slt -lflite_usenglish -lflite_cmulex -lflite"
@@ -5298,7 +5304,9 @@ if enabled icc; then
     # 10006: ignoring unknown option -fno-signed-zeros
     # 10148: ignoring unknown option -Wno-parentheses
     # 10156: ignoring option '-W'; no argument required
-    check_cflags -wd144,167,188,556,1292,1419,10006,10148,10156
+    # 13200: No EMMS instruction before call to function
+    # 13203: No EMMS instruction before return from function
+    check_cflags -wd144,167,188,556,1292,1419,10006,10148,10156,13200,13203
     # 11030: Warning unknown option --as-needed
     # 10156: ignoring option '-export'; no argument required
     check_ldflags -wd10156,11030
@@ -5326,6 +5334,7 @@ elif enabled gcc; then
     check_cflags -Werror=return-type
     check_cflags -Werror=vla
     check_cflags -Wformat
+    check_cflags -fdiagnostics-color=auto
     enabled extra_warnings || check_disable_warning -Wno-maybe-uninitialized
 elif enabled llvm_gcc; then
     check_cflags -mllvm -stack-alignment=16

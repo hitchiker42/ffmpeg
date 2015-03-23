@@ -2600,7 +2600,7 @@ static int mov_open_dref(AVIOContext **pb, const char *src, MOVDref *ref,
     /* try relative path, we do not try the absolute because it can leak information about our
        system to an attacker */
     if (ref->nlvl_to > 0 && ref->nlvl_from > 0) {
-        char filename[1024];
+        char filename[1025];
         const char *src_path;
         int i, l;
 
@@ -2626,10 +2626,15 @@ static int mov_open_dref(AVIOContext **pb, const char *src, MOVDref *ref,
             filename[src_path - src] = 0;
 
             for (i = 1; i < ref->nlvl_from; i++)
-                av_strlcat(filename, "../", 1024);
+                av_strlcat(filename, "../", sizeof(filename));
 
-            av_strlcat(filename, ref->path + l + 1, 1024);
+            av_strlcat(filename, ref->path + l + 1, sizeof(filename));
+            if (!use_absolute_path)
+                if(strstr(ref->path + l + 1, "..") || ref->nlvl_from > 1)
+                    return AVERROR(ENOENT);
 
+            if (strlen(filename) + 1 == sizeof(filename))
+                return AVERROR(ENOENT);
             if (!avio_open2(pb, filename, AVIO_FLAG_READ, int_cb, NULL))
                 return 0;
         }
@@ -3659,7 +3664,9 @@ static int mov_probe(AVProbeData *p)
                  AV_RB64(p->buf+offset + 8) == 0)) {
                 score = FFMAX(score, AVPROBE_SCORE_EXTENSION);
             } else if (tag == MKTAG('f','t','y','p') &&
-                       AV_RL32(p->buf + offset + 8) == MKTAG('j','p','2',' ')) {
+                       (   AV_RL32(p->buf + offset + 8) == MKTAG('j','p','2',' ')
+                        || AV_RL32(p->buf + offset + 8) == MKTAG('j','p','x',' ')
+                    )) {
                 score = FFMAX(score, 5);
             } else {
                 score = AVPROBE_SCORE_MAX;
@@ -4318,8 +4325,8 @@ static int mov_seek_stream(AVFormatContext *s, AVStream *st, int64_t timestamp, 
 
 static int mov_read_seek(AVFormatContext *s, int stream_index, int64_t sample_time, int flags)
 {
+    MOVContext *mc = s->priv_data;
     AVStream *st;
-    int64_t seek_timestamp, timestamp;
     int sample;
     int i;
 
@@ -4331,19 +4338,39 @@ static int mov_read_seek(AVFormatContext *s, int stream_index, int64_t sample_ti
     if (sample < 0)
         return sample;
 
-    /* adjust seek timestamp to found sample timestamp */
-    seek_timestamp = st->index_entries[sample].timestamp;
+    if (mc->seek_individually) {
+        /* adjust seek timestamp to found sample timestamp */
+        int64_t seek_timestamp = st->index_entries[sample].timestamp;
 
-    for (i = 0; i < s->nb_streams; i++) {
-        MOVStreamContext *sc = s->streams[i]->priv_data;
-        st = s->streams[i];
-        st->skip_samples = (sample_time <= 0) ? sc->start_pad : 0;
+        for (i = 0; i < s->nb_streams; i++) {
+            int64_t timestamp;
+            MOVStreamContext *sc = s->streams[i]->priv_data;
+            st = s->streams[i];
+            st->skip_samples = (sample_time <= 0) ? sc->start_pad : 0;
 
-        if (stream_index == i)
-            continue;
+            if (stream_index == i)
+                continue;
 
-        timestamp = av_rescale_q(seek_timestamp, s->streams[stream_index]->time_base, st->time_base);
-        mov_seek_stream(s, st, timestamp, flags);
+            timestamp = av_rescale_q(seek_timestamp, s->streams[stream_index]->time_base, st->time_base);
+            mov_seek_stream(s, st, timestamp, flags);
+        }
+    } else {
+        for (i = 0; i < s->nb_streams; i++) {
+            MOVStreamContext *sc;
+            st = s->streams[i];
+            sc = st->priv_data;
+            sc->current_sample = 0;
+        }
+        while (1) {
+            MOVStreamContext *sc;
+            AVIndexEntry *entry = mov_find_next_sample(s, &st);
+            if (!entry)
+                return AVERROR_INVALIDDATA;
+            sc = st->priv_data;
+            if (sc->ffindex == stream_index && sc->current_sample == sample)
+                break;
+            sc->current_sample++;
+        }
     }
     return 0;
 }
@@ -4354,6 +4381,10 @@ static const AVOption mov_options[] = {
     {"use_absolute_path",
         "allow using absolute path when opening alias, this is a possible security issue",
         OFFSET(use_absolute_path), FF_OPT_TYPE_INT, {.i64 = 0},
+        0, 1, FLAGS},
+    {"seek_streams_individually",
+        "Seek each stream individually to the to the closest point",
+        OFFSET(seek_individually), AV_OPT_TYPE_INT, { .i64 = 1 },
         0, 1, FLAGS},
     {"ignore_editlist", "", OFFSET(ignore_editlist), FF_OPT_TYPE_INT, {.i64 = 0},
         0, 1, FLAGS},
