@@ -197,6 +197,16 @@ static inline void prefetcht2(const void *p)
         : : "r" (p)
     );
 }
+#elif AV_GCC_VERSION_AT_LEAST(3,2)
+#define prefetchnta(p) __builtin_prefetch(p,0,0)
+#define prefetcht0(p) __builtin_prefetch(p,0,1)
+#define prefetcht1(p) __builtin_prefetch(p,0,2)
+#define prefetcht2(p) __builtin_prefetch(p,0,3)
+#else
+#define prefetchnta(p)
+#define prefetcht0(p)
+#define prefetcht1(p)
+#define prefetcht2(p)
 #endif
 
 /* The horizontal functions exist only in C because the MMX
