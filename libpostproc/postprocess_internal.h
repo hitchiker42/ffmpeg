@@ -143,8 +143,11 @@ typedef struct PPContext{
     DECLARE_ALIGNED(8, uint64_t, pQPb);
     DECLARE_ALIGNED(8, uint64_t, pQPb2);
 
-    DECLARE_ALIGNED(8, uint64_t, mmxDcOffset)[64];
-    DECLARE_ALIGNED(8, uint64_t, mmxDcThreshold)[64];
+    DECLARE_ALIGNED(32, uint64_t, pQPb_block)[4];
+    DECLARE_ALIGNED(32, uint64_t, pQPb2_block)[4];
+
+    DECLARE_ALIGNED(32, uint64_t, mmxDcOffset)[64];
+    DECLARE_ALIGNED(32, uint64_t, mmxDcThreshold)[64];
 
     QP_STORE_T *stdQPTable;       ///< used to fix MPEG2 style qscale
     QP_STORE_T *nonBQPTable;
@@ -152,6 +155,9 @@ typedef struct PPContext{
 
     int QP;
     int nonBQP;
+
+    QP_STORE_T QP_block[4];
+    QP_STORE_T nonBQP_block[4];
 
     int frameNum;
 
