@@ -22,7 +22,26 @@
  * @file
  * mmx/mmx2/3dnow postprocess code.
  */
+/*
+  TODO:
+  -Figure out how to deal with multiple blocks for horozontal code,
+     The best way is probably to transpose multiple blocks at once, but
+     that will entail messing with the temp blocks, and probably require
+     resizing them.
 
+  -Figure out how to deal with excess blocks, i.e when the total number of
+     blocks isn't a multiple of BLOCKS_PER_ITERATION. I think the best way
+     is to use a temporary block (maybe the same one used for transposing) fill it
+     with whatever blocks are left and zero the rest, then process that normally
+     and only copy the relevent blocks to the destination. This is probaly the easiest
+     way to ensure it works with the simd functions.
+
+  -Figure out how to integrate the simd assembly functions into this. This will entail 
+    figuring out how linking works in ffmpeg as well and figuring out the best way
+    to rename functions.
+
+  -Make sure it all works
+*/
 #include "libavutil/x86/asm.h"
 
 /* A single TEMPLATE_PP_* should be defined (to 1) when this template is
