@@ -1694,7 +1694,15 @@ DEINT_FF((%%REGd, %1), (%%REGd, %1, 2), (%0, %1, 8) , (%%REGd, %1, 4))
  */
 static inline void RENAME(deInterlaceL5)(uint8_t src[], int stride, uint8_t *tmp, uint8_t *tmp2)
 {
+    int block_index;
+    uint8_t *src_base = src;
+    uint8_t *tmp_base = tmp;
+    uint8_t *tmp2_base = tmp2;
+    for(block_index=0;block_index<BLOCKS_PER_ITERATION; block_index++){
 #if (TEMPLATE_PP_MMXEXT || TEMPLATE_PP_3DNOW) && HAVE_6REGS
+    src = src_base;
+    tmp = tmp_base;
+    tmp2 = tmp2_base;
     src+= stride*4;
     __asm__ volatile(
         "lea (%0, %1), %%"REG_a"                \n\t"
@@ -1756,6 +1764,9 @@ DEINT_L5(%%mm1, %%mm0, (%%REGd, %1, 2), (%0, %1, 8)    , (%%REGd, %1, 4))
     );
 #else //(TEMPLATE_PP_MMXEXT || TEMPLATE_PP_3DNOW) && HAVE_6REGS
     int x;
+    src = src_base;
+    tmp = tmp_base;
+    tmp2 = tmp2_base;
     src+= stride*4;
     for(x=0; x<8; x++){
         int t1= tmp[x];
@@ -1784,6 +1795,10 @@ DEINT_L5(%%mm1, %%mm0, (%%REGd, %1, 2), (%0, %1, 8)    , (%%REGd, %1, 4))
         src++;
     }
 #endif //(TEMPLATE_PP_MMXEXT || TEMPLATE_PP_3DNOW) && HAVE_6REGS
+        src_base += 8;
+        tmp_base += 8;
+        tmp2_base += 8;
+    }
 }
 
 /**
