@@ -1603,7 +1603,14 @@ DEINT_CUBIC((%%REGd, %1), (%0, %1, 8) , (%%REGd, %1, 4), (%%REGc)    , (%%REGc, 
  */
 static inline void RENAME(deInterlaceFF)(uint8_t src[], int stride, uint8_t *tmp)
 {
+    int block_index;
+    uint8_t *src_base = src;
+    uint8_t *tmp_base = tmp;
+    for(block_index=0;block_index<BLOCKS_PER_ITERATION; block_index++){
+
 #if TEMPLATE_PP_MMXEXT || TEMPLATE_PP_3DNOW
+    src = src_base;
+    tmp = tmp_base;
     src+= stride*4;
     __asm__ volatile(
         "lea (%0, %1), %%"REG_a"                \n\t"
@@ -1654,6 +1661,8 @@ DEINT_FF((%%REGd, %1), (%%REGd, %1, 2), (%0, %1, 8) , (%%REGd, %1, 4))
     );
 #else //TEMPLATE_PP_MMXEXT || TEMPLATE_PP_3DNOW
     int x;
+    src = src_base;
+    tmp = tmp_base;
     src+= stride*4;
     for(x=0; x<8; x++){
         int t1= tmp[x];
@@ -1671,6 +1680,9 @@ DEINT_FF((%%REGd, %1), (%%REGd, %1, 2), (%0, %1, 8) , (%%REGd, %1, 4))
         src++;
     }
 #endif //TEMPLATE_PP_MMXEXT || TEMPLATE_PP_3DNOW
+        tmp_base += 8;
+        src_base += 8;
+    }
 }
 
 /**
