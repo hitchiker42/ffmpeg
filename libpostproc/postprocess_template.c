@@ -2612,14 +2612,19 @@ Switch between
  * accurate deblock filter
  */
 static av_always_inline void RENAME(do_a_deblock)(uint8_t *src, int step, int stride, const PPContext *c, int mode){
+    int block_index;
+    uint8_t *src_base = src;
+    for(block_index=0;block_index<BLOCKS_PER_ITERATION; block_index++){
     int64_t dc_mask, eq_mask, both_masks;
     int64_t sums[10*8*2];
+    src = src_base;
     src+= step*3; // src points to begin of the 8x8 Block
     //{ START_TIMER
     __asm__ volatile(
         "movq %0, %%mm7                         \n\t"
         "movq %1, %%mm6                         \n\t"
-        : : "m" (c->mmxDcOffset[c->nonBQP]),  "m" (c->mmxDcThreshold[c->nonBQP])
+        : : "m" (c->mmxDcOffset[c->nonBQP_block[block_index]]),
+            "m" (c->mmxDcThreshold[c->nonBQP_block[block_index]])
         );
 
     __asm__ volatile(
@@ -2717,7 +2722,8 @@ static av_always_inline void RENAME(do_a_deblock)(uint8_t *src, int step, int st
         "movq %%mm6, %0                         \n\t"
 
         : "=m" (eq_mask), "=m" (dc_mask)
-        : "r" (src), "r" ((x86_reg)step), "m" (c->pQPb), "m"(c->ppMode.flatnessThreshold)
+        : "r" (src), "r" ((x86_reg)step), "m" (c->pQPb_block[block_index]),
+          "m"(c->ppMode.flatnessThreshold)
         : "%"REG_a
     );
 
@@ -2861,7 +2867,7 @@ static av_always_inline void RENAME(do_a_deblock)(uint8_t *src, int step, int st
             "mov %4, %0                             \n\t" //FIXME
 
             : "+&r"(src)
-            : "r" ((x86_reg)step), "m" (c->pQPb), "r"(sums), "g"(src)
+            : "r" ((x86_reg)step), "m" (c->pQPb_block[block_index]), "r"(sums), "g"(src)
               NAMED_CONSTRAINTS_ADD(w04)
         );
 
@@ -3133,7 +3139,7 @@ static av_always_inline void RENAME(do_a_deblock)(uint8_t *src, int step, int st
             "movq %%mm0, (%0, %1)                   \n\t"
 
             : "+r" (temp_src)
-            : "r" ((x86_reg)step), "m" (c->pQPb), "m"(eq_mask), "r"(tmp)
+            : "r" ((x86_reg)step), "m" (c->pQPb_block[block_index]), "m"(eq_mask), "r"(tmp)
               NAMED_CONSTRAINTS_ADD(w05,w20)
             : "%"REG_a
         );
@@ -3144,6 +3150,8 @@ static av_always_inline void RENAME(do_a_deblock)(uint8_t *src, int step, int st
     STOP_TIMER("stepX")
 }
     } */
+        src_base += 8;
+    }
 }
 #endif //TEMPLATE_PP_MMX
 
