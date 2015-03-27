@@ -1810,7 +1810,14 @@ DEINT_L5(%%mm1, %%mm0, (%%REGd, %1, 2), (%0, %1, 8)    , (%%REGd, %1, 4))
  */
 static inline void RENAME(deInterlaceBlendLinear)(uint8_t src[], int stride, uint8_t *tmp)
 {
+    int block_index;
+    uint8_t *src_base = src;
+    uint8_t *tmp_base = tmp;
+    for(block_index=0;block_index<BLOCKS_PER_ITERATION; block_index++){
+
 #if TEMPLATE_PP_MMXEXT || TEMPLATE_PP_3DNOW
+    src = src_base;
+    tmp = tmp_base;
     src+= 4*stride;
     __asm__ volatile(
         "lea (%0, %1), %%"REG_a"                \n\t"
@@ -1859,6 +1866,8 @@ static inline void RENAME(deInterlaceBlendLinear)(uint8_t src[], int stride, uin
     );
 #else //TEMPLATE_PP_MMXEXT || TEMPLATE_PP_3DNOW
     int a, b, c, x;
+    src = src_base;
+    tmp = tmp_base;
     src+= 4*stride;
 
     for(x=0; x<2; x++){
@@ -1901,6 +1910,9 @@ static inline void RENAME(deInterlaceBlendLinear)(uint8_t src[], int stride, uin
         tmp += 4;
     }
 #endif //TEMPLATE_PP_MMXEXT || TEMPLATE_PP_3DNOW
+        src_base += 8;
+        tmp_base += 8;
+    }
 }
 
 /**
