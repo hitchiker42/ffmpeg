@@ -3317,6 +3317,8 @@ SIMPLE_CPY((%%REGa, %2), (%%REGa, %2, 2), (%%REGd, %3), (%%REGd, %3, 2))
  */
 static inline void RENAME(duplicate)(uint8_t src[], int stride)
 {
+    int block_index;
+    for(block_index=0;block_index<BLOCKS_PER_ITERATION; block_index++){
 #if TEMPLATE_PP_MMX
     __asm__ volatile(
         "movq (%0), %%mm0               \n\t"
@@ -3337,6 +3339,8 @@ static inline void RENAME(duplicate)(uint8_t src[], int stride)
         memcpy(p, src, 8);
     }
 #endif
+    src += 8;
+    }
 }
 
 #undef mmx_pack_qp
