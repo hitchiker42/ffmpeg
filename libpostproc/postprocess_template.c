@@ -3181,9 +3181,12 @@ static void RENAME(postProcess)(const uint8_t src[], int srcStride, uint8_t dst[
 #undef REAL_SCALED_CPY
 #undef SCALED_CPY
 
-static inline void RENAME(blockCopy)(uint8_t dst[], int dstStride, const uint8_t src[], int srcStride,
+static inline void RENAME(blockCopy)(uint8_t dst[], int dstStride, const uint8_t src_base[], int srcStride,
                                      int levelFix, int64_t *packedOffsetAndScale)
 {
+    int block_index;
+    for(block_index=0;block_index<BLOCKS_PER_ITERATION; block_index++){
+    const uint8_t *src = src_base + block_index*8;
 #if !TEMPLATE_PP_MMX || !HAVE_6REGS
     int i;
 #endif
@@ -3303,6 +3306,9 @@ SIMPLE_CPY((%%REGa, %2), (%%REGa, %2, 2), (%%REGd, %3), (%%REGd, %3, 2))
         memcpy( &(dst[dstStride*i]),
                 &(src[srcStride*i]), BLOCK_SIZE);
 #endif //TEMPLATE_PP_MMX && HAVE_6REGS
+    }
+    src += 8;
+    dst += 8;
     }
 }
 
