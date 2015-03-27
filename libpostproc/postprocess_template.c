@@ -1923,7 +1923,11 @@ static inline void RENAME(deInterlaceBlendLinear)(uint8_t src[], int stride, uin
  */
 static inline void RENAME(deInterlaceMedian)(uint8_t src[], int stride)
 {
+    int block_index;
+    uint8_t *src_base = src;
+    for(block_index=0;block_index<BLOCKS_PER_ITERATION; block_index++){
 #if TEMPLATE_PP_MMX
+    src = src_base;
     src+= 4*stride;
 #if TEMPLATE_PP_MMXEXT
     __asm__ volatile(
@@ -2018,6 +2022,7 @@ MEDIAN((%%REGd, %1), (%%REGd, %1, 2), (%0, %1, 8))
 #endif //TEMPLATE_PP_MMXEXT
 #else //TEMPLATE_PP_MMX
     int x, y;
+    src = src_base;
     src+= 4*stride;
     // FIXME - there should be a way to do a few columns in parallel like w/mmx
     for(x=0; x<8; x++){
@@ -2036,6 +2041,8 @@ MEDIAN((%%REGd, %1), (%%REGd, %1, 2), (%0, %1, 8))
         src++;
     }
 #endif //TEMPLATE_PP_MMX
+        src_base += 8;
+    }
 }
 
 #if TEMPLATE_PP_MMX
