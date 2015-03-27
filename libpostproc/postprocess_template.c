@@ -406,7 +406,11 @@ static inline void RENAME(doVertLowPass)(uint8_t *src, int stride, PPContext *c)
  */
 static inline void RENAME(vertX1Filter)(uint8_t *src, int stride, PPContext *co)
 {
+    int block_index;
+    uint8_t *src_base = src;
+    for(block_index=0;block_index<BLOCKS_PER_ITERATION; block_index++){
 #if TEMPLATE_PP_MMXEXT || TEMPLATE_PP_3DNOW
+    src = src_base;
     src+= stride*3;
 
     __asm__ volatile(
@@ -489,7 +493,7 @@ static inline void RENAME(vertX1Filter)(uint8_t *src, int stride, PPContext *co)
         "movq %%mm0, (%%"REG_c", %1, 2)         \n\t" // line 7
 
         :
-        : "r" (src), "r" ((x86_reg)stride), "m" (co->pQPb)
+        : "r" (src), "r" ((x86_reg)stride), "m" (co->pQPb_block[block_index])
           NAMED_CONSTRAINTS_ADD(b01)
         : "%"REG_a, "%"REG_c
     );
@@ -505,6 +509,7 @@ static inline void RENAME(vertX1Filter)(uint8_t *src, int stride, PPContext *co)
 //    const int l8= stride + l7;
 //    const int l9= stride + l8;
     int x;
+    src = src_base;
 
     src+= stride*3;
     for(x=0; x<BLOCK_SIZE; x++){
@@ -528,6 +533,8 @@ static inline void RENAME(vertX1Filter)(uint8_t *src, int stride, PPContext *co)
         src++;
     }
 #endif //TEMPLATE_PP_MMXEXT || TEMPLATE_PP_3DNOW
+        src_base += 8;
+    }
 }
 
 #if !TEMPLATE_PP_ALTIVEC
