@@ -36,7 +36,7 @@
      and only copy the relevent blocks to the destination. This is probaly the easiest
      way to ensure it works with the simd functions.
 
-  -Figure out how to integrate the simd assembly functions into this. This will entail 
+  -Figure out how to integrate the simd assembly functions into this. This will entail
     figuring out how linking works in ffmpeg as well and figuring out the best way
     to rename functions.
 
@@ -3364,6 +3364,16 @@ static inline void RENAME(duplicate)(uint8_t src[], int stride)
 
 #undef mmx_pack_qp
 #if TEMPLATE_PP_MMX
+/*
+  in c:
+  -use intrinsics
+  -or do this (which is slower):
+  uint64_t tmp = QP;
+  tmp |= (tmp << 8); //0,...,QP,QP
+  tmp |= (tmp << 16);//0,...,QP,QP,QP,QP
+  uint32_t *pQP = c->pQPb;
+  pQP[0]= tmp; pQP[1] = tmp;
+*/
 #define mmx_pack_qp(QP, pQP)                                            \
     __asm__ volatile(                                                   \
         "movd %1, %%mm7         \n\t"                                   \
