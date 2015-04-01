@@ -3242,6 +3242,21 @@ static inline void RENAME(duplicate)(uint8_t src[], int stride)
 #endif
 }
 
+#undef mmx_pack_qp
+#if TEMPLATE_PP_MMX
+#define mmx_pack_qp(QP, pQP)                                            \
+    __asm__ volatile(                                                   \
+        "movd %1, %%mm7         \n\t"                                   \
+        "packuswb %%mm7, %%mm7  \n\t" /*0, 0, 0, QP, 0, 0, 0, QP*/      \
+        "packuswb %%mm7, %%mm7  \n\t" /* 0,QP, 0, QP, 0,QP, 0, QP*/     \
+        "packuswb %%mm7, %%mm7  \n\t" /*QP,..., QP*/                    \
+        "movq %%mm7, %0         \n\t"                                   \
+        : "=m" (pQP)                                                    \
+        : "r" (QP)                                                      \
+    );
+#else
+#define mmx_pack_qp(QP,pQP)
+#endif
 /**
  * Filter array of bytes (Y or U or V values)
  */
@@ -3460,18 +3475,7 @@ static void RENAME(postProcess)(const uint8_t src[], int srcStride, uint8_t dst[
                 }
                 c.QP_block[qp_index] = QP;
                 c.nonBQP_block[qp_index] = nonBQP;
-
-#if TEMPLATE_PP_MMX
-                __asm__ volatile(
-                    "movd %1, %%mm7         \n\t"
-                    "packuswb %%mm7, %%mm7  \n\t" // 0, 0, 0, QP, 0, 0, 0, QP
-                    "packuswb %%mm7, %%mm7  \n\t" // 0,QP, 0, QP, 0,QP, 0, QP
-                    "packuswb %%mm7, %%mm7  \n\t" // QP,..., QP
-                    "movq %%mm7, %0         \n\t"
-                    : "=m" (c.pQPb_block[qp_index])
-                    : "r" (QP)
-                );
-#endif
+                mmx_pack_qp(QP, c.pQPb_block[qp_index]);
             }
 
             for(qp_index=0; x < endx; x+=BLOCK_SIZE, qp_index++){
