@@ -3449,12 +3449,9 @@ static void RENAME(postProcess)(const uint8_t src[], int srcStride, uint8_t dst[
         // finish 1 block before the next otherwise we might have a problem
         // with the L1 Cache of the P4 ... or only a few blocks at a time or something
         for(x=0; x<width; ){
-            int startx = x;
             int endx = FFMIN(width, x+32);
-            uint8_t *dstBlockStart = dstBlock;
-            const uint8_t *srcBlockStart = srcBlock;
             int qp_index = 0;
-            for(qp_index=0; qp_index < (endx-startx)/BLOCK_SIZE; qp_index++){
+            for(qp_index=0; qp_index < (endx-x)/BLOCK_SIZE; qp_index++){
                 QP = QPptr[(x+qp_index*BLOCK_SIZE)>>qpHShift];
                 nonBQP = nonBQPptr[(x+qp_index*BLOCK_SIZE)>>qpHShift];
                 if(!isColor){
@@ -3477,7 +3474,15 @@ static void RENAME(postProcess)(const uint8_t src[], int srcStride, uint8_t dst[
 #endif
             }
 
-            for(; x < endx; x+=BLOCK_SIZE){
+            for(qp_index=0; x < endx; x+=BLOCK_SIZE, qp_index++){
+                const int stride= dstStride;
+                av_unused uint8_t *tmpXchg;
+                //temporary while changing QP stuff to make things continue to work
+                //eventually QP,nonBQP,etc will be arrays and this will be unnecessary
+                c.QP = c.QP_block[qp_index];
+                c.nonBQP = c.nonBQP_block[qp_index];
+                c.pQPb = c.pQPb_block[qp_index];
+                c.pQPb2 = c.pQPb2_block[qp_index];
                 prefetchnta(srcBlock + (((x>>2)&6) + copyAhead)*srcStride + 32);
                 prefetchnta(srcBlock + (((x>>2)&6) + copyAhead+1)*srcStride + 32);
                 prefetcht0(dstBlock + (((x>>2)&6) + copyAhead)*dstStride + 32);
@@ -3503,26 +3508,10 @@ static void RENAME(postProcess)(const uint8_t src[], int srcStride, uint8_t dst[
                 /*          else if(mode & CUBIC_BLEND_DEINT_FILTER)
                             RENAME(deInterlaceBlendCubic)(dstBlock, dstStride);
                 */
-                dstBlock+=8;
-                srcBlock+=8;
-            }
 
-          dstBlock = dstBlockStart;
-          srcBlock = srcBlockStart;
-
-          for(x = startx, qp_index = 0; x < endx; x+=BLOCK_SIZE, qp_index++){
-              const int stride= dstStride;
-              av_unused uint8_t *tmpXchg;
-              //temporary while changing QP stuff to make things continue to work
-              //eventually QP,nonBQP,etc will be arrays and this will be unnecessary
-              c.QP = c.QP_block[qp_index];
-              c.nonBQP = c.nonBQP_block[qp_index];
-              c.pQPb = c.pQPb_block[qp_index];
-              c.pQPb2 = c.pQPb2_block[qp_index];
               if(!isColor){
                   yHistogram[srcBlock[srcStride*12 + 4]]++;
               }
-
               /* only deblock if we have 2 blocks */
               if(y + 8 < height){
                   if(mode & V_X1_FILTER){
