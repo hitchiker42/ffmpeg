@@ -117,7 +117,7 @@ const char *postproc_license(void)
 #define OPTIONS_ARRAY_SIZE 10
 #define BLOCK_SIZE 8
 #define TEMP_STRIDE 8
-//#define NUM_BLOCKS_AT_ONCE 16 //not used yet
+#define BLOCKS_PER_ITERATION 1 //1 for now to keep old code working
 
 #if ARCH_X86 && HAVE_INLINE_ASM
 DECLARE_ASM_CONST(8, uint64_t, w05)= 0x0005000500050005LL;
