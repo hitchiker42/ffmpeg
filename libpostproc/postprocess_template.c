@@ -122,6 +122,11 @@
     "paddb " #a ", " #b " \n\t"
 #endif
 
+//Include horozontal functions for C only
+#if TEMPLATE_PP_C
+#include "postprocess_horozontal.c"
+#endif
+
 //FIXME? |255-0| = 1 (should not be a problem ...)
 #if TEMPLATE_PP_MMX
 /**
