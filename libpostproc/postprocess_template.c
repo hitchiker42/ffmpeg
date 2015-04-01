@@ -1509,7 +1509,11 @@ static inline void RENAME(deInterlaceInterpolateLinear)(uint8_t src[], int strid
  */
 static inline void RENAME(deInterlaceInterpolateCubic)(uint8_t src[], int stride)
 {
+    int block_index;
+    uint8_t *src_base = src;
+    for(block_index=0;block_index<BLOCKS_PER_ITERATION; block_index++){
 #if TEMPLATE_PP_SSE2 || TEMPLATE_PP_MMXEXT || TEMPLATE_PP_3DNOW
+    src = src_base;
     src+= stride*3;
     __asm__ volatile(
         "lea (%0, %1), %%"REG_a"                \n\t"
@@ -1576,6 +1580,7 @@ DEINT_CUBIC((%%REGd, %1), (%0, %1, 8) , (%%REGd, %1, 4), (%%REGc)    , (%%REGc, 
 #undef REAL_DEINT_CUBIC
 #else //TEMPLATE_PP_SSE2 || TEMPLATE_PP_MMXEXT || TEMPLATE_PP_3DNOW
     int x;
+    src = src_base;
     src+= stride*3;
     for(x=0; x<8; x++){
         src[stride*3] = av_clip_uint8((-src[0]        + 9*src[stride*2] + 9*src[stride*4] - src[stride*6])>>4);
@@ -1585,6 +1590,8 @@ DEINT_CUBIC((%%REGd, %1), (%0, %1, 8) , (%%REGd, %1, 4), (%%REGc)    , (%%REGc, 
         src++;
     }
 #endif //TEMPLATE_PP_SSE2 || TEMPLATE_PP_MMXEXT || TEMPLATE_PP_3DNOW
+    src_base += 8;
+    }
 }
 
 /**
