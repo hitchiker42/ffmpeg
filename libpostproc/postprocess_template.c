@@ -3512,6 +3512,7 @@ static void RENAME(postProcess)(const uint8_t src[], int srcStride, uint8_t dst[
 
           for(x = startx, qp_index = 0; x < endx; x+=BLOCK_SIZE, qp_index++){
               const int stride= dstStride;
+              av_unused uint8_t *tmpXchg;
               //temporary while changing QP stuff to make things continue to work
               //eventually QP,nonBQP,etc will be arrays and this will be unnecessary
               c.QP = c.QP_block[qp_index];
@@ -3536,22 +3537,8 @@ static void RENAME(postProcess)(const uint8_t src[], int srcStride, uint8_t dst[
                   } else if(mode & V_A_DEBLOCK){
                       RENAME(do_a_deblock)(dstBlock, stride, 1, &c, mode);
                   }
-
-                  dstBlock+=8;
-                  srcBlock+=8;
               }
-          }
 
-          dstBlock = dstBlockStart;
-          srcBlock = srcBlockStart;
-
-          for(x = startx, qp_index=0; x < endx; x+=BLOCK_SIZE, qp_index++){
-              const int stride= dstStride;
-              av_unused uint8_t *tmpXchg;
-              c.QP = c.QP_block[qp_index];
-              c.nonBQP = c.nonBQP_block[qp_index];
-              c.pQPb = c.pQPb_block[qp_index];
-              c.pQPb2 = c.pQPb2_block[qp_index];
 #if TEMPLATE_PP_MMX
               RENAME(transpose1)(tempBlock1, tempBlock2, dstBlock, dstStride);
 #endif
