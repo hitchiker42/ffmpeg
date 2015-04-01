@@ -3155,6 +3155,22 @@ static av_always_inline void RENAME(do_a_deblock)(uint8_t *src, int step, int st
 }
 #endif //TEMPLATE_PP_MMX
 
+static inline void RENAME(vertDeblock)(uint8_t *src, int stride, PPContext *c){
+    int block_index;
+    uint8_t *src_base = src;
+    for(block_index = 0; block_index < BLOCKS_PER_ITERATION; block_index++){
+        const int classification = RENAME(vertClassify)(src, stride, c);
+        src = src_base;
+        c->pQPb = c->pQPb_block[block_index];
+        if(classification == 1){
+            RENAME(doVertLowPass)(src, stride, c);
+        } else if(classification == 2){
+            RENAME(doVertDefFilter)(src, stride, c);
+        }
+        src_base += 8;
+    }
+}
+
 static void RENAME(postProcess)(const uint8_t src[], int srcStride, uint8_t dst[], int dstStride, int width, int height,
                                 const QP_STORE_T QPs[], int QPStride, int isColor, PPContext *c);
 
@@ -3587,26 +3603,19 @@ static void RENAME(postProcess)(const uint8_t src[], int srcStride, uint8_t dst[
                 /*          else if(mode & CUBIC_BLEND_DEINT_FILTER)
                             RENAME(deInterlaceBlendCubic)(dstBlock, dstStride);
                 */
-
-              if(!isColor){
-                  yHistogram[srcBlock[srcStride*12 + 4]]++;
-              }
-              /* only deblock if we have 2 blocks */
-              if(y + 8 < height){
-                  if(mode & V_X1_FILTER){
-                      RENAME(vertX1Filter)(dstBlock, stride, &c);
-                  } else if(mode & V_DEBLOCK){
-                      const int t= RENAME(vertClassify)(dstBlock, stride, &c);
-
-                      if(t==1)
-                          RENAME(doVertLowPass)(dstBlock, stride, &c);
-                      else if(t==2)
-                          RENAME(doVertDefFilter)(dstBlock, stride, &c);
-                  } else if(mode & V_A_DEBLOCK){
-                      RENAME(do_a_deblock)(dstBlock, stride, 1, &c, mode);
-                  }
-              }
-
+                if(!isColor){
+                    yHistogram[srcBlock[srcStride*12 + 4]]++;
+                }
+                /* only deblock if we have 2 blocks */
+                if(y + 8 < height){
+                    if(mode & V_X1_FILTER){
+                        RENAME(vertX1Filter)(dstBlock, stride, &c);
+                    } else if(mode & V_DEBLOCK){
+                        RENAME(vertDeblock)(dstBlock, stride, &c);
+                    } else if(mode & V_A_DEBLOCK){
+                        RENAME(do_a_deblock)(dstBlock, stride, 1, &c, mode);
+                    }
+                }
 #if TEMPLATE_PP_MMX
               RENAME(transpose1)(tempBlock1, tempBlock2, dstBlock, dstStride);
 #endif
