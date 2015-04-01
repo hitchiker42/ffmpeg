@@ -1449,7 +1449,11 @@ DERING_CORE((%0, %1, 8)    ,(%%REGd, %1, 4),%%mm2,%%mm4,%%mm0,%%mm3,%%mm5,%%mm1,
  */
 static inline void RENAME(deInterlaceInterpolateLinear)(uint8_t src[], int stride)
 {
+    int block_index;
+    uint8_t *src_base = src;
+    for(block_index=0;block_index<BLOCKS_PER_ITERATION; block_index++){
 #if TEMPLATE_PP_MMXEXT || TEMPLATE_PP_3DNOW
+    src = src_base;
     src+= 4*stride;
     __asm__ volatile(
         "lea (%0, %1), %%"REG_a"                \n\t"
@@ -1476,6 +1480,7 @@ static inline void RENAME(deInterlaceInterpolateLinear)(uint8_t src[], int strid
     );
 #else
     int a, b, x;
+    src = src_base;
     src+= 4*stride;
 
     for(x=0; x<2; x++){
@@ -1491,6 +1496,8 @@ static inline void RENAME(deInterlaceInterpolateLinear)(uint8_t src[], int strid
         src += 4;
     }
 #endif
+      src_base += 8;
+    }
 }
 
 /**
