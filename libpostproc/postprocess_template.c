@@ -2075,7 +2075,25 @@ MEDIAN((%%REGd, %1), (%%REGd, %1, 2), (%0, %1, 8))
         src_base += 8;
     }
 }
-
+static inline void transpose_shift(const uint8_t *src, int stride,
+                                   uint8_t *dst, uint8_t *dst2){
+    int i,j;
+    int offset1 = 128, offset2 = 16;
+    for(i=0;i<8;i++){
+        for(j=0;j<8;j++){
+            if(i<4){
+                *(dst+offset + i*8 + j)=*(src + j*stride + i);
+            } else if (i == 4){
+                *(dst + offset1 + i*8 + j)=*(src + j*stride + i);
+                *(dst2 + offset2 + i*8 + j)=*(src + j*stride + i);
+            } else {
+                *(dst2 + offset2 + i*8 + j)=*(src + j*stride + i);
+            }
+        }
+        if(i<=4){offset1+=16;}
+        if(i>=4){offset2+=16;}
+    }
+}
 #if TEMPLATE_PP_MMX
 /**
  * Transpose and shift the given 8x8 Block into dst1 and dst2.
