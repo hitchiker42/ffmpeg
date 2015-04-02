@@ -24,7 +24,7 @@
 ;; void duplicate(uint8 *src, int stride)
 ;; duplicate block_size pixels 5 times upwards
 ;; this should probably ultimately be inlined
-%macro gen_duplicate
+%macro gen_duplicate 0
 cglobal duplicate, 2, 2, 1
     neg r1
     mova m0, [r0]

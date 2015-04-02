@@ -160,8 +160,8 @@ cglobal deInterlaceBlendLinear, 3, 5, 3 ;src, stride, tmp
     RET
 %endmacro
 ;;set every other line Ln to  (-(Ln-2) + 4(Ln-1) + 2(2Ln) + 4(Ln+1) -(Ln+2))/8
-%macro gen_deinterlace_FF
-cglobal deInterlaceFF 3, 5, 8 ;;src, stride, tmp
+%macro gen_deinterlace_FF 0
+cglobal deInterlaceFF, 3, 5, 8 ;;src, stride, tmp
     lea r0, [r0 + 4*r1]
     lea r3, [r0 + r1]
     lea r4, [r3 + r1 * 4]
@@ -214,7 +214,7 @@ cglobal deInterlaceFF 3, 5, 8 ;;src, stride, tmp
     RET
 %endmacro
 
-%macro gen_deinterlace_L5
+%macro gen_deinterlace_L5 0
 ;; set each line Ln to (-(Ln-2) + 2(Ln-1) + 6Ln + 2(Ln+1) -(Ln+2))/8
 cglobal deInterlaceL5, 4, 6, 8 ;;src, stride, tmp1, tmp2
     lea r0, [r0 + r1 * 4]
@@ -280,11 +280,11 @@ cglobal deInterlaceL5, 4, 6, 8 ;;src, stride, tmp1, tmp2
     RET
 %endmacro
 
-%macro gen_deinterlace_median
+%macro gen_deinterlace_median 0
 ;; Apply a median filter to every second line
 ;; i.e for each set of bytes a,b,c in Ln-1,Ln,Ln+1 
 ;; set d,e,f equal to a,b,c such that d <= e <= f, set the byte in Ln equal to d
-cglobal deInterlaceMedian 2, 4, 4 ;;src, stride
+cglobal deInterlaceMedian, 2, 4, 4 ;;src, stride
     lea r0, [r0 + r1 * 4]
     lea r2, [r0 + r1]
     lea r3, [r2 + r1 * 4]
