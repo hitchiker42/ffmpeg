@@ -33,7 +33,7 @@ SECTION .text
 ;; on x86 and x85_64.
 
 cglobal do_a_deblock, 5, 6, 7, 22 * mmsize ;src, step, stride, ppcontext, mode
-;; stride, mode arguments are unused, but kept for compatability with 
+;; stride, mode arguments are unused, but kept for compatability with
 ;; existing c version. They will be removed eventually
     lea r0, [r0 + r1*2]
     add r0, r1
@@ -353,7 +353,7 @@ cglobal do_a_deblock, 5, 6, 7, 22 * mmsize ;src, step, stride, ppcontext, mode
     paddw m3, m3
     psubw m0, m2 ;;2L4 - 5L5 - 5L6 + 2L7
     psubw m1, m3
-    
+
     mova m2, [rsp]
     mova m3, [rsp + 1*mmsize]
 ;; Use extra  regs
@@ -408,11 +408,11 @@ cglobal do_a_deblock, 5, 6, 7, 22 * mmsize ;src, step, stride, ppcontext, mode
     paddw m5, m2
     psrlw m4, 6
     psrlw m5, 6
-    
+
     mova m0,[rsp + 2*mmsize];;L3-L4
     mova m1,[rsp + 3*mmsize]
 
-    pxor m2, m2 
+    pxor m2, m2
     pxor m3, m3
 
     pcmpgtw m2, m0 ;;sgn(L3-L4)
@@ -443,10 +443,10 @@ cglobal do_a_deblock, 5, 6, 7, 22 * mmsize ;src, step, stride, ppcontext, mode
     mova m0, [r6]
     paddb m0, m1
     mova [r6], m0,
-    mova m0, [r6 + r1]  
+    mova m0, [r6 + r1]
     psubb m0, m1
     mova [r6 + r1], m0
-    
+
 .end:
     add rsp, [rsp + 22*mmsize] ;;undo alignment
     add rsp, (22*mmsize)+gprsize
@@ -454,7 +454,7 @@ cglobal do_a_deblock, 5, 6, 7, 22 * mmsize ;src, step, stride, ppcontext, mode
 %endmacro
 
 INIT_MMX mmx2
-gen_deblock 
+gen_deblock
 INIT_XMM sse2
 gen_deblock
 INIT_YMM avx2

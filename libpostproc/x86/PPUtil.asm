@@ -96,7 +96,7 @@ movd %1, %3
 
 ;; Macros for defining simd constants
 %macro define_qword_vector_constant 5
-%assign %%section __SECT__
+%xdefine %%section __SECT__
 %if cpuflag(avx2)
 SECTION_RODATA 32
 %else
@@ -111,7 +111,7 @@ SECTION_RODATA 16
     dq %5
 %endif
 %endif
-SECTION %%section
+%%section
 %endmacro
 ;; convience macro to define a simd constant where each quadword is the same
 %macro define_qword_vector_constant 2
