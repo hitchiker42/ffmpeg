@@ -2075,6 +2075,7 @@ MEDIAN((%%REGd, %1), (%%REGd, %1, 2), (%0, %1, 8))
         src_base += 8;
     }
 }
+/*
 static inline void transpose_shift(const uint8_t *src, int stride,
                                    uint8_t *dst, uint8_t *dst2){
     int i,j;
@@ -2094,6 +2095,7 @@ static inline void transpose_shift(const uint8_t *src, int stride,
         if(i>=4){offset2+=16;}
     }
 }
+*/
 #if TEMPLATE_PP_MMX
 /**
  * Transpose and shift the given 8x8 Block into dst1 and dst2.
