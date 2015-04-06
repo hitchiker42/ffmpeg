@@ -24,57 +24,58 @@ function deInterlaceInterpolateLinear /* src, stride */
     mov r2, r0 @save initial src
 @would a shift be faster or does it not matter
     add r3, r1, r1 @scale by 2 lines at a time
-    @load q0-q4 from [r0], indexing by r3
+    @load v0-v4 from [r0], indexing by r3
     vldm128 0,4, r0, r3
 
     @     dst, src1, src2, tmp
-    vavgb q5,  q0,   q1,   q9 @L1
-    vavgb q6,  q1,   q2,   q9 @L3
-    vavgb q7,  q2,   q3,   q9 @L5
-    vavgb q8,  q3,   q4,   q9 @L7
+    vavgb v5,  v0,   v1,   v9 @L1
+    vavgb v6,  v1,   v2,   v9 @L3
+    vavgb v7,  v2,   v3,   v9 @L5
+    vavgb v8,  v3,   v4,   v9 @L7
 
-    @store q5-q8 into [r2], indexing by r3
+    @store v5-v8 into [r2], indexing by r3
     vstm128 5, 8, r2, r3
 
     bx lr
 endfunc
 
 function deInterlaceInterpolateCubic /*src, stride*/
-    mov r4, r1
-    add r4, r1, lsl 1 @r4 = r1*3
-    add r0, r4
-    add r2, r0, r4
+    mov r12, r1
+    add r12, r1, lsl 1 @r4 = r1*3
+    add r0, 12
+    add r2, r0, r12
     add r3, r1, r1
 
-    vldm128 0, 7, r0, r3 @{q0,q1...q6} = {L0,L2,...L12}
+    vldm128 0, 7, r0, r3 @{v0,v1...v6} = {L0,L2,...L12}
 
 .ifndef deint_cubic
 .macro deint_cubic a,b,d,e
-    pavgb q8, \a, \e, q15 @(a+e)/2
-    pavgb q9, \b, \d, q15 @(b+d)/2
+@    vavgb v8, \a, \e, v15 @(a+e)/2
+@    vavgb v9, \b, \d, v15 @(b+d)/2
 
-@expand bytes to words
-    vmovl.u8 q10, q8_h
-    vmovl.u8 q8, q8_l
-    vmovl.u8 q11, q9_h
-    vmovl.u8 q9, q9_l
+@ average and expand bytes to words
+    vavgl u8, v8, \a&_l, \e&_l
+    vavgl u8, v9, \a&_h, \e&_h
+    vavgl u8, v10, \b&_l, \d&_l
+    vavgl u8, v11, \b&_h, \d&_h
 
-    vsub.i16 q8, q9
-    vsub.i16 q10, q11 @((a+e) - (b+d))/2
-    vshr.i16 q8, #3
-    vshr.i16 q10, #3 @((a+e) - (b+d))/16
-    vadd.i16 q9, q8
-    vadd.i16 q11, q10 @(9(b+d) - (a+e))/16
+
+    vsub.i16 v8, v10
+    vsub.i16 v9, v11 @((a+e) - (b+d))/2
+    vshr.i16 v8, #3
+    vshr.i16 v9, #3 @((a+e) - (b+d))/16
+    vadd.i16 v10, v8
+    vadd.i16 v11, v9 @(9(b+d) - (a+e))/16
 @pack back into bytes, saturating if necessary
-    vqmovn.u16 q8_l, q9
-    vqmovn.u16 q8_h, q11
-    vst1.64 q8, [r2 :128], r3
+    vqmovn.u16 v8_l, v10
+    vqmovn.u16 v8_h, v11
+    vst1.64 v8, [r2 :128], r3
 .endm
 .endif
-    deint_cubic q0,q1,q2,q3 @L3
-    deint_cubic q1,q2,q3,q4 @L5
-    deint_cubic q2,q3,q4,q5 @L7
-    deint_cubic q3,q4,q5,q6 @L9
+    deint_cubic v0,v1,v2,v3 @L3
+    deint_cubic v1,v2,v3,v4 @L5
+    deint_cubic v2,v3,v4,v5 @L7
+    deint_cubic v3,v4,v5,v6 @L9
     
     bx lr
 endfunc
