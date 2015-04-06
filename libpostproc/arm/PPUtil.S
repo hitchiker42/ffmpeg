@@ -32,32 +32,61 @@ e * but WITHOUT ANY WARRANTY; without even the implied warranty of
     vavg u8, \dst, \src1, \src2, \tmp
 .endm
 
+@ average the elements from two doublewords and store the results into
+@ a quadword, before averaging sign/zero extend the elements
+@ This is faster than averaging then expanding as two seperate operations
+.macro vavgl type, dst, src1, src2
+    vaddl.\type \dst, \src1, \src2
+    vshr.\type \dst, 1
+.endm
+@ shorthand for vavgl u8, dst, src1, src2
+.macro vavglb dst, src1, src2
+    vavgl u8, \dst, \src1, \src2
+.endm
+
 .macro alias name, reg
     \name .req reg
 .endm
 .macro aliasq name, reg, type
+.ifnb type
     \name .qn \reg\().\type
+.else
+    \name .qn \reg
+.endif
 .endm
 .macro aliasd name, reg, type
+.ifnb type
     \name .dn \reg\().\type
+.else
+    \name .dn \reg
+.endif
 .endm
 .macro unalias name
    .unreq \name
 .endm
-
+.altmacro
+@ these macros allow defining the layout of a structure, such that the
+@ fields can be accessed by adding the name of the field to the base
+@ of the structure in asm code
 .macro struc name
     .struct 0
-\name\():
+\name&:
 .endm
-.macro field name, sz
-\name\():
-    .struct \name + sz
+.macro field name, sz, align
+.ifnb \align
+    .struct . + ((\align - (. % \align)) % \align)
+.endif
+\name&:
+    .struct \name + \sz
 .endm
-.macro endstruc section=".text"
+.endmacro
+    
+.macro endstruc name, section=".text"
+\name&_size:
     .section \section
 .endm
-.altmacro    
- @ define QN_l to DN*2 and QN_h to DN*2+1
+@ define QN_l to DN*2 and QN_h to DN*2+1
+@ not really useful anymore
 .macro alias_doubleword_to_quadword cnt
     LOCAL loop
     .macro loop i, j, k
@@ -69,12 +98,25 @@ e * but WITHOUT ANY WARRANTY; without even the implied warranty of
     .endm
     loop 0,0,1
 .endm
-/* load num quadword registers, starting at base and indexing by scale*/
-/* loads into registers starting at Q\start*/
+.macro unalias_all
+    LOCAL loop
+    .macro loop i,j
+      .unreq r&\i
+      .unreq q&\i
+      .unreq d&\i
+      .unreq d&\j
+    .if \i < \15
+      loop %(\i+1) %(\j+1)
+    .endif
+    .endm
+    loop 0, 16
+.endm
+@ load num quadword registers, starting at base and indexing by scale
+@ loads into registers starting at v\start
 .macro vldm128 start, stop, base, scale
     LOCAL loop
     .macro loop i
-        vld1.64 q\i, [\base :128], \scale
+        vld1.64 v\i, [\base :128], \scale
         .if \i+1 <= \stop
            loop %(\i+1)
         .endif
@@ -84,13 +126,54 @@ e * but WITHOUT ANY WARRANTY; without even the implied warranty of
 .macro vstm128 start, stop, base, scale
     LOCAL loop
     .macro loop i
-        vst1.64 q\i, [\base :128], \scale
+        vst1.64 v\i, [\base :128], \scale
         .if \i+1 <= \stop
            loop %(\i+1)
         .endif
     .endm
     loop \start
 .endm
-
-
+@ To allow permuting register names we use vN as the qword register name
+@ and vN_l/vN_h as the equivlent dword register names (at least before swapping)
+.macro set_v_alias v, q
+    LOCAL do_alias
+    .macro do_alias i,j,k,n
+        unalias v\n
+        unalias v\n&&_1
+        unalias v\n&&_h
+        alias v\n q\i
+        alias v\n&&_l d\j
+        alias v\n&&_h d\k
+        .set v\n&&_number, \i
+    .endm
+    do_alias \q, %(\q * 2), %(\q * 2 + 1), \v
+.endm
+        
+.macro reset_v_aliases
+    LOCAL loop
+    .macro loop i
+        set_v_alias \i, \i
+    .if \i < 15
+        loop %(\i + 1)
+    .endif
+    .endm
+    loop 0
+.endm
+.macro VSWAP va,vb
+    LOCAL n,m
+    .set n, \va&_number
+    .set m, \vb&_number
+    set_v_alias n, m
+    set_v_alias m, n
+.endm
+.macro init_v_aliases
+@ q4-q7 (d8-d15) are callee saved, so it's easiest to swap
+@ them with q12-q15
+    reset_v_aliases
+    VSWAP 4, 12
+    VSWAP 5, 13
+    VSWAP 6, 14
+    VSWAP 7, 15
+.endm
 alias_doubleword_to_quadword 15
+

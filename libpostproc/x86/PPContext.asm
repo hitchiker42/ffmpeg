@@ -56,7 +56,7 @@ struc PPContext
     alignb 32
     .pQPb2_block resq 4
 ;; These next fields & next alignment may need to be changed for 128/256 bit registers
-    alignb 8
+    alignb 32
     .mmx_dc_offset resq 64
     .mmx_dc_threshold resq 64
     .std_QP_table pointer 1
@@ -64,6 +64,7 @@ struc PPContext
     .forced_QP_table pointer 1
     .QP resd 1
     .nonBQP resd 1
+;; check header to see if these are bytes or ints
     .QP_block resb 4
     .nonBQP_block resb 4
     .frame_num resd 1
