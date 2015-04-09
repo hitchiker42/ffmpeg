@@ -581,114 +581,6 @@ static inline void RENAME(doVertDefFilter)(uint8_t src[], int stride, PPContext 
 */
     src+= stride*4;
     __asm__ volatile(
-
-#if 0 //slightly more accurate and slightly slower
-        "pxor %%mm7, %%mm7                      \n\t" // 0
-        "lea (%0, %1), %%"REG_a"                \n\t"
-        "lea (%%"REG_a", %1, 4), %%"REG_c"      \n\t"
-//      0       1       2       3       4       5       6       7
-//      %0      %0+%1   %0+2%1  eax+2%1 %0+4%1  eax+4%1 ecx+%1  ecx+2%1
-//      %0      eax     eax+%1  eax+2%1 %0+4%1  ecx     ecx+%1  ecx+2%1
-
-
-        "movq (%0, %1, 2), %%mm0                \n\t" // l2
-        "movq (%0), %%mm1                       \n\t" // l0
-        "movq %%mm0, %%mm2                      \n\t" // l2
-        PAVGB(%%mm7, %%mm0)                           // ~l2/2
-        PAVGB(%%mm1, %%mm0)                           // ~(l2 + 2l0)/4
-        PAVGB(%%mm2, %%mm0)                           // ~(5l2 + 2l0)/8
-
-        "movq (%%"REG_a"), %%mm1                \n\t" // l1
-        "movq (%%"REG_a", %1, 2), %%mm3         \n\t" // l3
-        "movq %%mm1, %%mm4                      \n\t" // l1
-        PAVGB(%%mm7, %%mm1)                           // ~l1/2
-        PAVGB(%%mm3, %%mm1)                           // ~(l1 + 2l3)/4
-        PAVGB(%%mm4, %%mm1)                           // ~(5l1 + 2l3)/8
-
-        "movq %%mm0, %%mm4                      \n\t" // ~(5l2 + 2l0)/8
-        "psubusb %%mm1, %%mm0                   \n\t"
-        "psubusb %%mm4, %%mm1                   \n\t"
-        "por %%mm0, %%mm1                       \n\t" // ~|2l0 - 5l1 + 5l2 - 2l3|/8
-// mm1= |lenergy|, mm2= l2, mm3= l3, mm7=0
-
-        "movq (%0, %1, 4), %%mm0                \n\t" // l4
-        "movq %%mm0, %%mm4                      \n\t" // l4
-        PAVGB(%%mm7, %%mm0)                           // ~l4/2
-        PAVGB(%%mm2, %%mm0)                           // ~(l4 + 2l2)/4
-        PAVGB(%%mm4, %%mm0)                           // ~(5l4 + 2l2)/8
-
-        "movq (%%"REG_c"), %%mm2                \n\t" // l5
-        "movq %%mm3, %%mm5                      \n\t" // l3
-        PAVGB(%%mm7, %%mm3)                           // ~l3/2
-        PAVGB(%%mm2, %%mm3)                           // ~(l3 + 2l5)/4
-        PAVGB(%%mm5, %%mm3)                           // ~(5l3 + 2l5)/8
-
-        "movq %%mm0, %%mm6                      \n\t" // ~(5l4 + 2l2)/8
-        "psubusb %%mm3, %%mm0                   \n\t"
-        "psubusb %%mm6, %%mm3                   \n\t"
-        "por %%mm0, %%mm3                       \n\t" // ~|2l2 - 5l3 + 5l4 - 2l5|/8
-        "pcmpeqb %%mm7, %%mm0                   \n\t" // SIGN(2l2 - 5l3 + 5l4 - 2l5)
-// mm0= SIGN(menergy), mm1= |lenergy|, mm2= l5, mm3= |menergy|, mm4=l4, mm5= l3, mm7=0
-
-        "movq (%%"REG_c", %1), %%mm6            \n\t" // l6
-        "movq %%mm6, %%mm5                      \n\t" // l6
-        PAVGB(%%mm7, %%mm6)                           // ~l6/2
-        PAVGB(%%mm4, %%mm6)                           // ~(l6 + 2l4)/4
-        PAVGB(%%mm5, %%mm6)                           // ~(5l6 + 2l4)/8
-
-        "movq (%%"REG_c", %1, 2), %%mm5         \n\t" // l7
-        "movq %%mm2, %%mm4                      \n\t" // l5
-        PAVGB(%%mm7, %%mm2)                           // ~l5/2
-        PAVGB(%%mm5, %%mm2)                           // ~(l5 + 2l7)/4
-        PAVGB(%%mm4, %%mm2)                           // ~(5l5 + 2l7)/8
-
-        "movq %%mm6, %%mm4                      \n\t" // ~(5l6 + 2l4)/8
-        "psubusb %%mm2, %%mm6                   \n\t"
-        "psubusb %%mm4, %%mm2                   \n\t"
-        "por %%mm6, %%mm2                       \n\t" // ~|2l4 - 5l5 + 5l6 - 2l7|/8
-// mm0= SIGN(menergy), mm1= |lenergy|/8, mm2= |renergy|/8, mm3= |menergy|/8, mm7=0
-
-
-        PMINUB(%%mm2, %%mm1, %%mm4)                   // MIN(|lenergy|,|renergy|)/8
-        "movq %2, %%mm4                         \n\t" // QP //FIXME QP+1 ?
-        "paddusb "MANGLE(b01)", %%mm4           \n\t"
-        "pcmpgtb %%mm3, %%mm4                   \n\t" // |menergy|/8 < QP
-        "psubusb %%mm1, %%mm3                   \n\t" // d=|menergy|/8-MIN(|lenergy|,|renergy|)/8
-        "pand %%mm4, %%mm3                      \n\t"
-
-        "movq %%mm3, %%mm1                      \n\t"
-//        "psubusb "MANGLE(b01)", %%mm3           \n\t"
-        PAVGB(%%mm7, %%mm3)
-        PAVGB(%%mm7, %%mm3)
-        "paddusb %%mm1, %%mm3                   \n\t"
-//        "paddusb "MANGLE(b01)", %%mm3           \n\t"
-
-        "movq (%%"REG_a", %1, 2), %%mm6         \n\t" //l3
-        "movq (%0, %1, 4), %%mm5                \n\t" //l4
-        "movq (%0, %1, 4), %%mm4                \n\t" //l4
-        "psubusb %%mm6, %%mm5                   \n\t"
-        "psubusb %%mm4, %%mm6                   \n\t"
-        "por %%mm6, %%mm5                       \n\t" // |l3-l4|
-        "pcmpeqb %%mm7, %%mm6                   \n\t" // SIGN(l3-l4)
-        "pxor %%mm6, %%mm0                      \n\t"
-        "pand %%mm0, %%mm3                      \n\t"
-        PMINUB(%%mm5, %%mm3, %%mm0)
-
-        "psubusb "MANGLE(b01)", %%mm3           \n\t"
-        PAVGB(%%mm7, %%mm3)
-
-        "movq (%%"REG_a", %1, 2), %%mm0         \n\t"
-        "movq (%0, %1, 4), %%mm2                \n\t"
-        "pxor %%mm6, %%mm0                      \n\t"
-        "pxor %%mm6, %%mm2                      \n\t"
-        "psubb %%mm3, %%mm0                     \n\t"
-        "paddb %%mm3, %%mm2                     \n\t"
-        "pxor %%mm6, %%mm0                      \n\t"
-        "pxor %%mm6, %%mm2                      \n\t"
-        "movq %%mm0, (%%"REG_a", %1, 2)         \n\t"
-        "movq %%mm2, (%0, %1, 4)                \n\t"
-#endif //0
-
         "lea (%0, %1), %%"REG_a"                \n\t"
         "pcmpeqb %%mm6, %%mm6                   \n\t" // -1
 //      0       1       2       3       4       5       6       7
@@ -791,61 +683,6 @@ static inline void RENAME(doVertDefFilter)(uint8_t src[], int stride, PPContext 
         : "%"REG_a, "%"REG_c
     );
 
-/*
-    {
-    int x;
-    src-= stride;
-    for(x=0; x<BLOCK_SIZE; x++){
-        const int middleEnergy= 5*(src[l5] - src[l4]) + 2*(src[l3] - src[l6]);
-        if(FFABS(middleEnergy)< 8*QP){
-            const int q=(src[l4] - src[l5])/2;
-            const int leftEnergy=  5*(src[l3] - src[l2]) + 2*(src[l1] - src[l4]);
-            const int rightEnergy= 5*(src[l7] - src[l6]) + 2*(src[l5] - src[l8]);
-
-            int d= FFABS(middleEnergy) - FFMIN( FFABS(leftEnergy), FFABS(rightEnergy) );
-            d= FFMAX(d, 0);
-
-            d= (5*d + 32) >> 6;
-            d*= FFSIGN(-middleEnergy);
-
-            if(q>0){
-                d= d<0 ? 0 : d;
-                d= d>q ? q : d;
-            }else{
-                d= d>0 ? 0 : d;
-                d= d<q ? q : d;
-            }
-
-            src[l4]-= d;
-            src[l5]+= d;
-        }
-        src++;
-    }
-    src-=8;
-    for(x=0; x<8; x++){
-        int y;
-        for(y=4; y<6; y++){
-            int d= src[x+y*stride] - tmp[x+(y-4)*8];
-            int ad= FFABS(d);
-            static int max=0;
-            static int sum=0;
-            static int num=0;
-            static int bias=0;
-
-            if(max<ad) max=ad;
-            sum+= ad>3 ? 1 : 0;
-            if(ad>3){
-                src[0] = src[7] = src[stride*7] = src[(stride+1)*7]=255;
-            }
-            if(y==4) bias+=d;
-            num++;
-            if(num%1000000 == 0){
-                av_log(c, AV_LOG_INFO, " %d %d %d %d\n", num, sum, max, bias);
-            }
-        }
-    }
-}
-*/
 #elif TEMPLATE_PP_MMX
     DECLARE_ALIGNED(8, uint64_t, tmp)[4]; // make space for 4 8-byte vars
     src+= stride*4;
@@ -1478,38 +1315,22 @@ DERING_CORE((%0, %1, 8)    ,(%%REGd, %1, 4),%%mm2,%%mm4,%%mm0,%%mm3,%%mm5,%%mm1,
  * lines 0-3 have been passed through the deblock / dering filters already, but can be read, too.
  * lines 4-12 will be read into the deblocking filter and should be deinterlaced
  */
+#if !0
+static inline void RENAME(deInterlaceInterpolateLinear)(uint8_t src[], int stride){
+    int block_index;
+    uint8_t *src_base = src;
+    for(block_index=0;block_index<BLOCKS_PER_ITERATION; block_index++){
+        src = src_base;
+        ff_deInterlaceInterpolateLinear_mmx2(src,stride);
+        src_base += 8;
+    }
+}
+#else
 static inline void RENAME(deInterlaceInterpolateLinear)(uint8_t src[], int stride)
 {
     int block_index;
     uint8_t *src_base = src;
     for(block_index=0;block_index<BLOCKS_PER_ITERATION; block_index++){
-#if TEMPLATE_PP_MMXEXT || TEMPLATE_PP_3DNOW
-        src = src_base;
-        src+= 4*stride;
-        __asm__ volatile(
-            "lea (%0, %1), %%"REG_a"                \n\t"
-            "lea (%%"REG_a", %1, 4), %%"REG_c"      \n\t"
-//      0       1       2       3       4       5       6       7       8       9
-//      %0      eax     eax+%1  eax+2%1 %0+4%1  ecx     ecx+%1  ecx+2%1 %0+8%1  ecx+4%1
-
-            "movq (%0), %%mm0                       \n\t"
-            "movq (%%"REG_a", %1), %%mm1            \n\t"
-            PAVGB(%%mm1, %%mm0)
-            "movq %%mm0, (%%"REG_a")                \n\t"
-            "movq (%0, %1, 4), %%mm0                \n\t"
-            PAVGB(%%mm0, %%mm1)
-            "movq %%mm1, (%%"REG_a", %1, 2)         \n\t"
-            "movq (%%"REG_c", %1), %%mm1            \n\t"
-            PAVGB(%%mm1, %%mm0)
-            "movq %%mm0, (%%"REG_c")                \n\t"
-            "movq (%0, %1, 8), %%mm0                \n\t"
-            PAVGB(%%mm0, %%mm1)
-            "movq %%mm1, (%%"REG_c", %1, 2)         \n\t"
-
-            : : "r" (src), "r" ((x86_reg)stride)
-            : "%"REG_a, "%"REG_c
-        );
-#else
         int a, b, x;
         src = src_base;
         src+= 4*stride;
@@ -1526,11 +1347,10 @@ static inline void RENAME(deInterlaceInterpolateLinear)(uint8_t src[], int strid
             *(uint32_t*)&src[stride*7]= (a|b) - (((a^b)&0xFEFEFEFEUL)>>1);
             src += 4;
         }
-#endif
         src_base += 8;
     }
 }
-
+#endif
 /**
  * Deinterlace the given block by cubic interpolating every second line.
  * will be called for every 8x8 block and can read & write from line 4-15
@@ -1538,6 +1358,18 @@ static inline void RENAME(deInterlaceInterpolateLinear)(uint8_t src[], int strid
  * lines 4-12 will be read into the deblocking filter and should be deinterlaced
  * this filter will read lines 3-15 and write 7-13
  */
+#if 0
+static inline void RENAME(deInterlaceInterpolateCubic)(uint8_t src[], int stride){
+    return;
+    int block_index;
+    uint8_t *src_base = src;
+    for(block_index=0;block_index<BLOCKS_PER_ITERATION; block_index++){
+        src = src_base;
+        ff_deInterlaceInterpolateCubic_mmx2(src,stride);
+        src_base += 8;
+    }
+}
+#else
 static inline void RENAME(deInterlaceInterpolateCubic)(uint8_t src[], int stride)
 {
     int block_index;
@@ -1624,6 +1456,7 @@ DEINT_CUBIC((%%REGd, %1), (%0, %1, 8) , (%%REGd, %1, 4), (%%REGc)    , (%%REGc, 
         src_base += 8;
     }
 }
+#endif
 
 /**
  * Deinterlace the given block by filtering every second line with a (-1 4 2 4 -1) filter.

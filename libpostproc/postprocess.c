@@ -169,7 +169,9 @@ static const char * const replaceTable[]=
 };
 
 
-#if ARCH_X86 && HAVE_INLINE_ASM
+//I question the necessity of this inline asm, since I'm sure the 
+//gcc bulitin will expand to the exact same thing
+#if ARCH_X86 && HAVE_INLINE_ASM && HAVE_SSE
 static inline void prefetchnta(const void *p)
 {
     __asm__ volatile(   "prefetchnta (%0)\n\t"
@@ -549,7 +551,7 @@ static void reallocBuffers(PPContext *c, int width, int height, int stride, int 
 
     reallocAlign((void **)&c->tempDst, stride*24+32);
     reallocAlign((void **)&c->tempSrc, stride*24);
-    reallocAlign((void **)&c->tempBlocks, 2*16*8);
+    reallocAlign((void **)&c->tempBlocks, 2*4*8*8);
     reallocAlign((void **)&c->yHistogram, 256*sizeof(uint64_t));
     for(i=0; i<256; i++)
             c->yHistogram[i]= width*height/64*15/256;

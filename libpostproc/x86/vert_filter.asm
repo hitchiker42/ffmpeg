@@ -21,6 +21,8 @@
 ;* Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 %include "PPutil.asm"
 
+define_qword_vector_constant b80, 0x8080808080808080
+
 ;; The return value is a 32 bit integer with each byte corrsponding to a block
 %macro gen_vert_classify 0
 cglobal vert_classify, 3, 6, 7;,src, stride, context
@@ -270,3 +272,30 @@ cglobal doVertLowPass 3, 5, 8 ;;src, stride, ppcontext
     sub r0, r1 ;;Why do this, to set flags? I can't think of another reason
     RET
 %endmacro
+
+%macro gen_do_vert_def_filter 0
+cglobal doVertDefFilter 3,6,8 ;src,stride,ppcontext
+    lea r0, [r0 + 4*r1]
+    lea r3, [r0 + r1]
+    lea r4, [r3 + 4*r1]
+    pcmpeqb m7, m7 ;;all 1s
+    mova m0, [r0 + 4*r1] ;L4
+    mova m1, [r3 + 2*r1] ;L3
+    mova m2, [r3 + 4*r1] ;L5
+    mova m3, [r3 + r1]   ;L2
+    mova m4, [b80] ;each byte is 0x80
+    pxor m1, m7 ;~L3 = -L3 -1
+    pxor m2, m7 ;~L5 = -L5 -1
+    mova m5, m2
+
+    pavgb m0, m1 ;;(L4-L3+256)/2
+    pavgb m2, m3 ;;(L2-L5+256)/2
+    pavgb m4, m0 ;;~(L4-L3)/4 + 128
+    pavgb m4, m2 ;;~(L2-L5)/4 + (L4-L3)/8 + 128
+    pavgb m4, m0 ;;~(L2-L5)/8 + 5(L4-L3)/16 + 128 === M/16
+    
+    mova m2, [r3] ;;L1
+    pxor m2, m7  ;;~L1
+    pavgb m2, m3 ;;(L2-L1+256)/2
+    pavgb m1, [r0] ;;(L0-L3+256)/2
+    

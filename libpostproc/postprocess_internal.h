@@ -118,8 +118,6 @@ typedef struct PPContext{
      */
     const AVClass *av_class;
 
-    uint8_t *tempBlocks; ///<used for the horizontal code
-
     /**
      * luma histogram.
      * we need 64bit here otherwise we'll going to have a problem
@@ -129,6 +127,8 @@ typedef struct PPContext{
 
     DECLARE_ALIGNED(8, uint64_t, packedYOffset);
     DECLARE_ALIGNED(8, uint64_t, packedYScale);
+
+    DECLARE_ALIGNED(32, uint8_t *, tempBlocks); ///<used for the horizontal code
 
     /** Temporal noise reducing buffers */
     uint8_t *tempBlurred[3];
@@ -180,5 +180,6 @@ static inline void linecpy(void *dest, const void *src, int lines, int stride) {
         memcpy((uint8_t*)dest+(lines-1)*stride, (const uint8_t*)src+(lines-1)*stride, -lines*stride);
     }
 }
-
+extern void ff_deInterlaceInterpolateLinear_mmx2(uint8_t *src, int stride);
+extern void ff_deInterlaceInterpolateCubic_mmx2(uint8_t *src, int stride);
 #endif /* POSTPROC_POSTPROCESS_INTERNAL_H */
