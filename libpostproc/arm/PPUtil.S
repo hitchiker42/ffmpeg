@@ -20,14 +20,39 @@ e * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
  */
 #include "libavutil/arm/asm.S"
+@ used to get the size/signedness of a type, for use in macros
+@ necessary since gnu as doesn't have any means of getting a substring
+.set u8_size 8
+.set u8_sign u
+.set s8_size 8
+.set s8_sign s
+.set u16_size 16
+.set u16_sign u
+.set s16_size 16
+.set s16_sign s
+.set u32_size 32
+.set u32_sign u
+.set s32_size 32
+.set s32_sign s
+.set u64_size 64
+.set u64_sign u
+.set s64_size 64
+.set s64_sign s
 /*(a+b)/2 == ((a&b) + (a^b)/2)*/
-
 .macro vavg type, dst, src1, src2, tmp
     veor.\type  \tmp, \src1, \src2
     vand.\type  \dst, \src1, \src2
-    vshra.\type \dst, \tmp, #1
+    vrshra.\type \dst, \tmp, #1
 .endm
-
+/*
+.macro vavg type, dst, src1, src2, tmp
+    vaddl.\type \tmp, \src1&_l, \src2&_l
+@this type needs to be 2x the original type (use a table or something)
+    vrshrn.\type&_sign%(\type&_size * 2) \dst&_l, \tmp, 1
+    vaddl.\type \tmp, \src1&_h, \src2&_h
+    vrshrn.\type&_sign%(\type&_size &2) \dst&_h, \tmp, 1
+.endm
+*/
 .macro vavgb dst, src1, src2, tmp
     vavg u8, \dst, \src1, \src2, \tmp
 .endm
@@ -37,7 +62,8 @@ e * but WITHOUT ANY WARRANTY; without even the implied warranty of
 @ This is faster than averaging then expanding as two seperate operations
 .macro vavgl type, dst, src1, src2
     vaddl.\type \dst, \src1, \src2
-    vshr.\type \dst, 1
+@ rounding shift right (this should emulate the results of pavgb on x86
+    vrshr.\type \dst, 1
 .endm
 @ shorthand for vavgl u8, dst, src1, src2
 .macro vavglb dst, src1, src2
@@ -135,6 +161,26 @@ e * but WITHOUT ANY WARRANTY; without even the implied warranty of
 .endm
 @ To allow permuting register names we use vN as the qword register name
 @ and vN_l/vN_h as the equivlent dword register names (at least before swapping)
+@ create typed aliases, i.e:
+@ vN_uM = qN.uM/vN_sM = qN.sM/Vn_uM_l = d2N.uN, etc M=8,16,32,64
+.macro set_sign_alias 
+.endm
+.macro set_sign_aliases v,q
+    LOCAL do_alias
+    .macro do_alias i,j,k,l,n
+        aliasq v\l&_u\n, q\i, u\n
+        aliasq v\l&_s\n, q\i, s\n
+        aliasq v\l&_u\n&_l, d\j, u\n
+        aliasq v\l&_u\n&_h, d\k, u\n
+        aliasq v\l&_s\n&_l, d\j, s\n
+        aliasq v\l&_s\n&_h, d\k, s\n
+    .endm
+    do_alias \q, %(\q*2), %(\q*2+1), \v, 8
+    do_alias \q, %(\q*2), %(\q*2+1), \v, 16
+    do_alias \q, %(\q*2), %(\q*2+1), \v, 32
+    do_alias \q, %(\q*2), %(\q*2+1), \v, 64
+.endm
+    
 .macro set_v_alias v, q
     LOCAL do_alias
     .macro do_alias i,j,k,n
@@ -147,6 +193,7 @@ e * but WITHOUT ANY WARRANTY; without even the implied warranty of
         .set v\n&&_number, \i
     .endm
     do_alias \q, %(\q * 2), %(\q * 2 + 1), \v
+    set_sign_aliases \v, \q
 .endm
         
 .macro reset_v_aliases
@@ -176,4 +223,3 @@ e * but WITHOUT ANY WARRANTY; without even the implied warranty of
     VSWAP 7, 15
 .endm
 alias_doubleword_to_quadword 15
-
