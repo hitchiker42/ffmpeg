@@ -280,6 +280,7 @@ cglobal doVertDefFilter 3,6,8 ;src,stride,ppcontext
     lea r4, [r3 + 4*r1]
     pcmpeqb m7, m7 ;;all 1s
     mova m0, [r0 + 4*r1] ;L4
+    pxor m6, m6
     mova m1, [r3 + 2*r1] ;L3
     mova m2, [r3 + 4*r1] ;L5
     mova m3, [r3 + r1]   ;L2
@@ -295,7 +296,29 @@ cglobal doVertDefFilter 3,6,8 ;src,stride,ppcontext
     pavgb m4, m0 ;;~(L2-L5)/8 + 5(L4-L3)/16 + 128 === M/16
     
     mova m2, [r3] ;;L1
-    pxor m2, m7  ;;~L1
+    pxor m2, m7  ;;~L1 = -L1-1
     pavgb m2, m3 ;;(L2-L1+256)/2
     pavgb m1, [r0] ;;(L0-L3+256)/2
+    mova m3, [b80]
+    pavgb m3, m2 ;;~(L2-L1)/4 + 128
+    pavgb m3, m1 ;;~(L0-L3)/4 + (L2-L1)/8 + 128
+    pavgb m3, m2 ;;~(L0-L3)/8 + 5(L2-L1)/16 + 128 === L/16
+    
+    pavgb m5, [r4 + r1] ;;(L6 - L5 + 256)/2
+    mova m1, [r4 + r1 * 2];;L7
+    pxor m1, m7 ;;~L7
+    pavgb m1, [r0 + r1 * 4] ;;(L4-L7+256)/2
+    mova m2, [b80]
+    pavgb m2, m5 ;;~(L6-L5)/4 + 128
+    pavgb m2, m1 ;;~(L4-L7)/4 + (L6-L5)/8 + 128
+    pavgb m2, m5 ;;~(L4-L7)/8 + 5(L6-L5)/16 + 128 === R/16
+    
+    pxor m1, m1
+    pxor m5, m5
+
+    psubb m1, m2 ;;128 - R/16
+    psubb m5, m3 ;;128 - L/16
+    pmaxub m2, m1 ;;128 + |R/16|
+    pmaxub m3, m5 ;;128 + |L/16|
+    pminub m3, m2 ;;128 + min(L,R)/16
     
