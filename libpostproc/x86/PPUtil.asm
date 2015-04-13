@@ -94,28 +94,23 @@ movd %1, %3
 %endif
 %endmacro
 
-;; Macros for defining simd constants
-%macro define_qword_vector_constant 5
+;; Macros for defining simd constants, 
+;; Always defines a 256 bit, 32 byte aligned constant, which is more
+;; size/alignment than is necessary for sse/mmx, but ensures the same
+;; constant will work for all simd instruction sets
+%macro define_vector_constant 5
 %xdefine %%section __SECT__
-%if cpuflag(avx2)
 SECTION_RODATA 32
-%else
-SECTION_RODATA 16
-%endif
 %1:
     dq %2
-%if cpuflag(sse2)
     dq %3
-%if cpuflag(avx2)
     dq %4
     dq %5
-%endif
-%endif
 %%section
 %endmacro
-;; convience macro to define a simd constant where each quadword is the same
-%macro define_qword_vector_constant 2
-    define_qword_vector_constant %1,%2,%2,%2,%2
+;; convenience macro to define a simd constant where each quadword is the same
+%macro define_vector_constant 2
+    define_vector_constant %1,%2,%2,%2,%2
 %endmacro
 
 ;; Macros to emulate the ptest instruction for pre-sse41 cpus
@@ -155,6 +150,34 @@ SECTION_RODATA 16
 %endif
 %endmacro
 
+;;make pshufw work with xmm/ymm registers, via shuffling
+;;the low and high words seperately
+%macro pshufw 3
+%if cpuflag(sse2) | cpuflag(avx2)
+    pshuflw %1,%2,%3
+    pshufhw %1,%2,%3
+%else
+    pshufw %1,%2,%3
+%endif
+%endmacro
+;;find the minimum/maixum byte in a simd register
+;;the phsufw's can/should probably be changed for
+;;sse/avx since it's two instructions  
+%macro horiz_min_max_ub 2-3 ;;src, tmp, op
+    mova %2, %1
+    psrlq %1, 8
+    %3 %1, %2
+    pshufw %2, %1, 0b11111001
+    %3 %1,%2
+    pshufw %2, %1, 0b11111110
+    %3 %1, %2
+%endmacro
+%macro phminub 2
+    horiz_min_max_ub %1,%2,pminub
+%endmacro
+%macro phmaxub 2
+    horiz_min_max_ub %1,%2,pmaxub
+%endmacro
 ;; define packed conditional moves, of the form:
 ;; pcmovXXS dst, src, arg1, arg2, tmp
 ;; where XX is a comparision (eq,ne,gt,...) and S is a size(b,w,d,q)
@@ -185,3 +208,16 @@ do_simd_sizes gen_pcmovxx,lt
 do_simd_sizes gen_pcmovxx,le
 do_simd_sizes gen_pcmovxx,gt
 do_simd_sizes gen_pcmovxx,ge
+
+
+
+define_vector_constant b01, 0x0101010101010101
+define_vector_constant b02, 0x0202020202020202
+define_vector_constant b08, 0x0808080808080808
+define_vector_constant b80, 0x8080808080808080
+define_vector_constant w04, 0x0004000400040004
+define_vector_constant w05, 0x0005000500050005
+define_vector_constant w20, 0x0020002000200020
+define_vector_constant q20, 0x0000000000000020 ;;dering threshold
+%xdefine packed_dering_threshold q20
+%assign dering_threshold 0x20

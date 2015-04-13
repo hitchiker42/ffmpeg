@@ -36,7 +36,7 @@ cglobal deInterlaceInterpolateLinear, 2, 4, 5;, src, stride
     lea r3, [r2 + r1 * 4]
 
     mova m0, [r0] ;0
-    mova m1, [r0 + 2*r1] ;2
+    mova m1, [r2 + r1] ;2
     mova m2, [r0 + 4*r1] ;4
     mova m3, [r3 + r1] ;6
     mova m4, [r0 + 8*r1] ;8
@@ -48,19 +48,20 @@ cglobal deInterlaceInterpolateLinear, 2, 4, 5;, src, stride
 
     mova [r2], m0
     mova [r2 + r1 * 2], m1
-    mova [r3], m0
-    mova [r3 + r1 * 2], m0
+    mova [r3], m2
+    mova [r3 + r1 * 2], m3
     RET
 %endmacro
 ;; Deinterlace blocks using cubic interpolation
 ;; Line 2n+1 = (9(2n) + 9(2n+2) - (2n-2) - (2n+4))/16
 %macro gen_deinterlace_interpolate_cubic 0
 cglobal deInterlaceInterpolateCubic, 2, 5, 5;, src, stride
-    lea r2, [r1 + r1 * 2]
-    add r0, r2
+    lea r0, [r0 + r1 * 2]
+    add r0, r1
     lea r2, [r0 + r1]
     lea r3, [r2 + r1 * 4]
     lea r4, [r3 + r1 * 4]
+    add r4, r1
     pxor m4, m4
 
 ;; TODO: See if there is speed gained by interleaving invocations of
@@ -69,30 +70,30 @@ cglobal deInterlaceInterpolateCubic, 2, 5, 5;, src, stride
 %ifnmacro deint_cubic
 ;; given 5 lines a,b,c,d,e: a = c-3, b = c-1, d = c+1, e = c + 2
 ;; set c = (9b + 9d - a - b)/16
-%macro deint_cubic 5;;a,b,c,d,e
+%macro deint_cubic 5;;L1,L2,L3,L4,L5
     mova m0,%1
     mova m1,%2
     mova m2,%4
     mova m3,%5
-    pavgb m1,m2 ;(b+d)/2
-    pavgb m0,m3 ;(a+e)/2
+    pavgb m1,m2 ;(L2+L4)/2
+    pavgb m0,m3 ;(L1+L5)/2
 
-    mova m2,m1
-    punpcklbw m1, m4
-    punpckhbw m2, m4
-
-    mova m0,m3
+    mova m3, m0
     punpcklbw m0, m4
-    punpckhbw m3, m4
+    punpckhbw m3, m4 ;;(L1+L5)/2
 
-    psubw m0, m1 ;L(a+e - (b+d))/2
-    psubw m3, m2 ;H(a+e - (b+d))/2
+    mova m2, m1
+    punpcklbw m1, m4
+    punpckhbw m2, m4 ;;(L2+L4)/2
+
+    psubw m0, m1
+    psubw m3, m2 ;;(L1+L5 - (L2+L4))/2
     psraw m0, 3
     psraw m3, 3
-    psubw m1, m0 ;L(9(b+d) - (a+e))/16
-    psubw m3, m2 ;H(9(b+d) - (a+e))/16
+    psubw m1, m0
+    psubw m2, m3 ;(9(L2+L4) - (L1+L5))/16
     ;; convert the words back into bytes using unsigned saturation
-    packuswb m1, m3
+    packuswb m1, m2
     mova %3, m1
 %endmacro
 %endif
@@ -144,7 +145,7 @@ cglobal deInterlaceBlendLinear, 3, 5, 3 ;src, stride, tmp
     mova m2, [r4 + r1]  ;L7
     pavgb m1, m2
     pavgb m1, m0
-    mova [r4], m1 
+    mova [r4], m1
 
     mova m1, [r4 + r1 * 2] ;L8
     pavgb m0, m1
@@ -166,7 +167,7 @@ cglobal deInterlaceFF, 3, 5, 8 ;;src, stride, tmp
     lea r3, [r0 + r1]
     lea r4, [r3 + r1 * 4]
     pxor m7, m7
-    mova m6, [r2] ;;L0 (tmp) 
+    mova m6, [r2] ;;L0 (tmp)
 
 %ifnmacro deint_ff
 %macro deint_ff 5
@@ -196,7 +197,7 @@ cglobal deInterlaceFF, 3, 5, 8 ;;src, stride, tmp
 
     psubw m1, m0
     psubw m4, m3 ;;(Ln-1 + Ln+1)*2 - (Ln-2 + Ln+2)/2
-    
+
     paddw m1, m2
     paddw m4, m5 ;;(Ln-1 + Ln+1)*2 + Ln - (Ln-2 + Ln+2)/2
 
@@ -206,7 +207,7 @@ cglobal deInterlaceFF, 3, 5, 8 ;;src, stride, tmp
     packuswb m1, m4
     mova %3, m1
 %endmacro
-%endif    
+%endif
     deint_ff m6, [r0], [r3], [r3 + r1], [r3 + r1 * 2]
     deint_ff m6, [r3 + r1], [r3 + r1 *2], [r0 + r1 * 4], [r4]
     deint_ff m6, [r0 + r1 * 4], [r4], [r4 + r1], [r4 + r1 * 2]
@@ -229,10 +230,10 @@ cglobal deInterlaceL5, 4, 6, 8 ;;src, stride, tmp1, tmp2
     mova m2, %3;%3
     mova m3, %4;%4
     mova m4, %5;%5
-    
+
     pavgb m4, %1 ;;(Ln-2 + Ln+2)/2
     pavgb m3, %2 ;;(Ln-1 + Ln+1)/2
-    
+
     mova %1, m2 ;;Ln-2 for next n
     mova m5, m2
     mova m6, m3
@@ -241,7 +242,7 @@ cglobal deInterlaceL5, 4, 6, 8 ;;src, stride, tmp1, tmp2
     punpckhbw m5, m7
 
     mova m6, m2
-    paddw m2, m2 
+    paddw m2, m2
     paddw m2, m6
     mova m6, m5
     paddw m5, m5
@@ -250,7 +251,7 @@ cglobal deInterlaceL5, 4, 6, 8 ;;src, stride, tmp1, tmp2
     mova m6, m3
     punpcklbw m3, m7
     punpckhbw m6, m7
-    
+
     paddw m3, m3
     paddw m6, m6
     paddw m3, m2
@@ -259,12 +260,12 @@ cglobal deInterlaceL5, 4, 6, 8 ;;src, stride, tmp1, tmp2
     mova m6, m4
     punpcklbw m4, m7
     punpckhbw m6, m7
-    
+
     psubsw m2, m4
     psubsw m5, m6 ;;(-Ln-2 + 2Ln-1 + 6Ln + 2Ln+1 - Ln+2)/2
     psraw m2, 2
     psraw m5, 2 ;;(...)/8 (same as above)
-    
+
     packuswb m2, m5
     mova %3, m2
 %endmacro
@@ -282,13 +283,13 @@ cglobal deInterlaceL5, 4, 6, 8 ;;src, stride, tmp1, tmp2
 
 %macro gen_deinterlace_median 0
 ;; Apply a median filter to every second line
-;; i.e for each set of bytes a,b,c in Ln-1,Ln,Ln+1 
+;; i.e for each set of bytes a,b,c in Ln-1,Ln,Ln+1
 ;; set d,e,f equal to a,b,c such that d <= e <= f, set the byte in Ln equal to d
 cglobal deInterlaceMedian, 2, 4, 4 ;;src, stride
     lea r0, [r0 + r1 * 4]
     lea r2, [r0 + r1]
     lea r3, [r2 + r1 * 4]
-%ifnmacro deint_median    
+%ifnmacro deint_median
 %macro deint_median 4
     mova %4, %1
     pmaxub %1, %2
@@ -302,7 +303,7 @@ cglobal deInterlaceMedian, 2, 4, 4 ;;src, stride
     mova m2, [r2 + r1] ;2
     deint_median m0, m1, m2, m3
     mova [r2], m0 ;1
-    
+
     ;; m2 = 2
     mova m1, [r2 + r1 * 2] ;3
     mova m0, [r0 + r1 * 4] ;4
@@ -319,7 +320,7 @@ cglobal deInterlaceMedian, 2, 4, 4 ;;src, stride
 
     mova m2, [r3 + r1 * 2] ;7
     mova m0, [r0 + r1 * 8] ;8
-;; and shouldn't this be m1, m0, m2, m3 
+;; and shouldn't this be m1, m0, m2, m3
     deint_median m2, m1, m0, m3
     mova [r3 + r1 * 2], m2 ;7
     RET

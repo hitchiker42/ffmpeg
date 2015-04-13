@@ -21,10 +21,6 @@
 ;* Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 ;*
 %include "PPUtil.asm"
-define_qword_vector_constant w04,0x0004000400040004
-define_qword_vector_constant w05,0x0005000500050005
-define_qword_vector_constant w20,0x0020002000200020
-SECTION .text
 %macro gen_deblock 0
 ;; This is a version of do_a_deblock that should work for mmx,sse and avx
 ;; on x86 and x85_64.

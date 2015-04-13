@@ -22,108 +22,84 @@
 ;* along with FFmpeg; if not, write to the Free Software
 ;* Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 %include "PPUtil.asm"
-%assign b01 0x0101010101010101
-%assign b02 0x0202020202020202
-%assign b08 0x0808080808080808
-%assign b80 0x8080808080808080
-;;
-define_qword_vector_constant dering_threshold,20,20,20,20
+define_vector_constant low_byte_mask, 0x00000000000000ff
+;;when anded with a register converts every other byte into a word
+;;define_vector_constant word_mask, 0x00ff00ff00ff00ff
+;;I assume it's faster to generate it as is done it the code then to load it
+%macro gen_dering 0
+cglobal dering, 3, 6, 7, 3*mmsize;src, stride, context
+    lea r3, [r0 + r1]
+    lea r4, [r3 + r1 * 4]
+    pxor m6, m6 ;;all bits 0
+    pcmpebq m7, m7 ;;all bits 1
+    mova m0, [r2 + PPContext.pQPb] ;;QP
+%if cpuflag(sse2)
+    cmpeqb m5, m5
+    punpcklbw m5, m6 ;;a register w/each word = 0x00ff
+    pand m0, m1 ;;expand QP to words
+%else ;;mmx
+    punpcklbw m0, m6
+%endif
+    psrlw m0, 1
+    psubw m0, m7
+    packuswb m0, m0
+    mova [r2 + PPContext.pQPb2], m0
+;;compute the minimum and maximum byte in each column of the
+;;source and store them in m7,m6 respectively
+%ifnmacro find_min_max
 %macro find_min_max 1
     mova m0, %1
     pminub m7, m0
     pmaxub m6, m0
 %endmacro
-;; shuffles the words in each quadword of %1,%2 according to %3
-%macro shuffle_words 3
-%if cpuflag(sse2) | cpuflag(avx2)
-    pshuflw %1,%2,%3
-    pshufhw %1,%2,%3
-%else
-    pshufw %1,%2,%3
 %endif
-%endmacro
-%macro gen_dering
-;;
-%assign %%stacksz 4*mmsize
-cglobal dering, 3, 6, 7;src, stride, context, tmp1, tmp2, tmp3
-%if ARCH_X86_64 == 0
-    sub esp,(4 * %%stacksz)
-    lea r5,esp
-%elif WIN64
-    sub rsp,(4 * %%stacksz)
-    lea r5,rsp
-%else
-    lea r5,[rsp + %%stacksz]
-%endif
-    pxor m6,m6
-    pcmpeqb m7,m7 ;set to 1s
-;; Not sure what this does
-    movq m0, [r2 + PPContext.pQPb]
-    dup_low_quadword m0
-    punpcklbw m0, m6
-    psrlw m0, 1
-    psubw m0, m7
-    packuswb m0, m0
-    movq m0, [r2 + PPContext.pQPb2]
-;; end not sure part
-    mov r3, [r0 + r1]
-    mov r4, [r3 + r1 * 4]
-;; Would it be more efficent to use different registers for different lines
-;; or can the cpu tell that m1-m5 aren't being used and alias them to m0?
-    find_min_max [r3]
-    find_min_max [r3 + r1]
-    find_min_max [r3 + r1 * 2]
-    find_min_max [r0 + r1 * 4]
-    find_min_max [r4]
-    find_min_max [r4 + r1]
-    find_min_max [r4 + r1 * 2]
-    find_min_max [r0 + r1 * 8]
-;; m6 holds the min of the rows, m7 the max
-    mova m4, m7
-    psrlq m7, 8
-    pminub m7, m4
-    shuffle_words m4, m7, 11111001b
-    pminub m7, m4
-    shuffle_words m4, m7, 11111110b
-    pminub m7, m4
+    find_min_max [r3] ;;L1
+    find_min_max [r3 + r1] ;;L2
+    find_min_max [r3 + r1 * 2] ;;L3
+    find_min_max [r0 + r1 * 4] ;;L4
+    find_min_max [r4] ;;L5
+    find_min_max [r4 + r1] ;;L6
+    find_min_max [r4 + r1 * 2] ;;L7
+    find_min_max [r0 + r1 * 8] ;;L8
 
-    mova m6, m4
-    psrlq m6, 8
-    pmaxub m6, m4
-    shuffle_words m4, m6, 11111001b
-    pmaxub m6, m4
-    shuffle_words m4, m6, 11111110b
-    pmaxub m6, m4
-
+    phminub m7, m4
+    phmaxub m6, m4
     mova m0, m6
-    psubb m6, m7 ;;max - min
-;; skip processing only if all blocks are below
-;; the dering_threshold
-    mova m1, [dering_threshold]
-;; might need to mask off the high doubleword of m6
-    pcmpged m1, m6
-    ptest m1,m1
+    psubb m6, m7
+%if cpuflag(sse)
+;;if we're processing more than one block
+;;test w/dering_threshold for each block
+;;and only skip dering if all blocks fail
+    mova m4, [packed_dering_threshold]
+    mova m5, [low_byte_mask]
+    pand m6, m5
+    pcmpgt m6, m4
+    movmaskb r5, m6
+    test r5, r5
     jz .end
-;; Some blocks might be below the dering threshold, but I imagine it won't
-;; hurt to process them if it would there are ways around it
-    pavgb m7, m0
-    ;;fill all of m7 with what is currently the low byte
-    %if cpuflag(avx2)
-    vpermq m7, m7, 0x00
-    %endif
-    punbcklbw m7,m7
-    punbcklbw m7,m7
-    punbcklbw m7,m7
-    mova m0, [r0]
+%else ;;mmx
+    movd r5, m6
+    mov r6, dering_threshold
+    test r5b, r6b
+    jb .end
+%endif
+    dup_low_byte m7, m0
+    mova [rsp], m7
+    mova m0, [r0] ;;L10
     mova m1, m0
     mova m2, m0
-;; I'm not sure how to translate this since I'm not exactly sure what the code is doing
-
-
-.end:
-%if ARCH_X86_64 == 0
-    add esp,(4 * %%stacksz)
-%elif WIN64
-    add, rsp,(4 * %%stacksz)
-%endif
+    psllq m1, 8
+    psrlq m2, 8
+;;these offsets might need to be adjusted
+    mova m3, [r0 + -4]
+    mova m4, [r0 + 8]
+    psrlq m3, 24
+    psllq m4, 56
+    por m1, m3 ;;L00
+    por m2, m4 ;;L20
+    ;;the calculaton of L00,L20 may need to be adjusted,
+    ;;but everything below shouldn't be effected
+    mova m3, m1 ;;L00
+    
+.end
     REP_RET

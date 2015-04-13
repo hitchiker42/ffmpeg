@@ -21,6 +21,8 @@
 ;* Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 %include "PPutil.asm"
 
+define_qword_vector_constant b80, 0x8080808080808080
+
 ;; The return value is a 32 bit integer with each byte corrsponding to a block
 %macro gen_vert_classify 0
 cglobal vert_classify, 3, 6, 7;,src, stride, context
@@ -254,7 +256,7 @@ cglobal doVertLowPass 3, 5, 8 ;;src, stride, ppcontext
     pavgb m1, m6 ;;(L2 + L3 + 4L6 + L8/9)/8
     pavgb m1, m0 ;;(L2 + L3 + 2L4 + 2L5 + 4L6 + 2L7 + 2L8 + L8/9)/16
     mova [r3 + r1 * 2], m1 ;;L6 (store)
-    
+
     mova m0, [r3 + r1 * 4] ;;L8
     pavgb m2, [r4] ;;(L3 + L4 + 2L5 + 4L7)/8
     pavgb m6, m0 ;;(L6 + L8)/2
@@ -270,3 +272,117 @@ cglobal doVertLowPass 3, 5, 8 ;;src, stride, ppcontext
     sub r0, r1 ;;Why do this, to set flags? I can't think of another reason
     RET
 %endmacro
+
+%macro gen_do_vert_def_filter 0
+cglobal doVertDefFilter 3,6,8 ;src,stride,ppcontext
+    lea r0, [r0 + 4*r1]
+    lea r3, [r0 + r1]
+    lea r4, [r3 + 4*r1]
+<<<<<<< HEAD
+    pcmpeQb m7, m7 ;;all 1s
+    mova m0, [r0 + 4*r1] ;L4
+    pxor m6, m6
+=======
+    pcmpeqb m7, m7 ;;all 1s
+    mova m0, [r0 + 4*r1] ;L4
+>>>>>>> e8052ef... Work in progress
+    mova m1, [r3 + 2*r1] ;L3
+    mova m2, [r3 + 4*r1] ;L5
+    mova m3, [r3 + r1]   ;L2
+    mova m4, [b80] ;each byte is 0x80
+    pxor m1, m7 ;~L3 = -L3 -1
+    pxor m2, m7 ;~L5 = -L5 -1
+    mova m5, m2
+
+<<<<<<< HEAD
+    pavgb m0, m1 ;;(L4-L3+256)/2 === 128-Q
+=======
+    pavgb m0, m1 ;;(L4-L3+256)/2
+>>>>>>> e8052ef... Work in progress
+    pavgb m2, m3 ;;(L2-L5+256)/2
+    pavgb m4, m0 ;;~(L4-L3)/4 + 128
+    pavgb m4, m2 ;;~(L2-L5)/4 + (L4-L3)/8 + 128
+    pavgb m4, m0 ;;~(L2-L5)/8 + 5(L4-L3)/16 + 128 === M/16
+<<<<<<< HEAD
+
+    mova m2, [r3] ;;L1
+    pxor m2, m7  ;;~L1 = -L1-1
+    pavgb m2, m3 ;;(L2-L1+256)/2
+    pavgb m1, [r0] ;;(L0-L3+256)/2
+    mova m3, [b80]
+    pavgb m3, m2 ;;~(L2-L1)/4 + 128
+    pavgb m3, m1 ;;~(L0-L3)/4 + (L2-L1)/8 + 128
+    pavgb m3, m2 ;;~(L0-L3)/8 + 5(L2-L1)/16 + 128 === L/16
+
+    pavgb m5, [r4 + r1] ;;(L6 - L5 + 256)/2
+    mova m1, [r4 + r1 * 2];;L7
+    pxor m1, m7 ;;~L7
+    pavgb m1, [r0 + r1 * 4] ;;(L4-L7+256)/2
+    mova m2, [b80]
+    pavgb m2, m5 ;;~(L6-L5)/4 + 128
+    pavgb m2, m1 ;;~(L4-L7)/4 + (L6-L5)/8 + 128
+    pavgb m2, m5 ;;~(L4-L7)/8 + 5(L6-L5)/16 + 128 === R/16
+
+    pxor m1, m1
+    pxor m5, m5
+
+    psubb m1, m2 ;;128 - R/16
+    psubb m5, m3 ;;128 - L/16
+    pmaxub m2, m1 ;;128 + |R/16|
+    pmaxub m3, m5 ;;128 + |L/16|
+    pminub m3, m2 ;;128 + min(|L|,|R|)/16
+
+    mova m2, [r2 + PPContext.pQPb]
+    pavgb m2, m7 ;;128+QP/2
+    psubb m6, m2 ;;QP/2 (is this the best way to get this?)
+
+    mova m1, m4 ;;M/16
+    pcmpgtb m1, m6 ;;SGN(M)
+    pxor m4, m1 ;;|M|/16
+    psubb m4, m1 ;;128 + |M|/16
+    pcmpgtb m2, m4 ;;|M|/16 < QP/2 (mask)
+    psubusb m4, m3 ;;|M|/16 - MIN(|L|,|R)/16 === D/16
+
+    mova m3, m4 ;;D/16
+    psubusb m4, [b01] ;;D/16 - 1
+;;The way pavgb works is that it calculates the sum with 9 bit
+;;precision, adds 1 and then shifts right by 1, so pavgb x, 0
+;;is equivlent to (x+1)/2, this should explain the next 2 results
+    pavgb m4, m6 ;;D/32
+    pavgb m4, m6 ;;(D+32)/64 == (D/32 + 1)/64
+    paddb m4, m3 ;;5d/64 (I guess the 32 goes away due to rounding)
+    pand m4, m2 ;;|M|/16 < QP/2 ? 5d/64 : 0
+
+    mova m5, [b80]
+    psubb m5, m0 ;;128 - (L4-L3+256)/2 === 128 - (128-Q) === Q
+    paddsb m5, m7 ;;fix bad rounding ??? (Q - 1)
+    pcmpgtb m6, m5 ;;sgn(Q)
+    pxor m5, m6  ;;abs(Q)
+
+    pminub m4, m5 ;;min(|Q|,5d/64)
+    pxor m6, m1 ;;SGN(D*Q) ??? (sgn(Q) ^ sgn(M))
+
+
+    pand m4, m6 ;;SGN(D*Q) == 1 && |M|/16 < QP/2 ? 5d/64 : 0 === X
+    mova m0, [r3 + r1 * 2] ;;L3
+    mova m2, [r0 + r1 * 4] ;;L4
+    pxor m0, m1 ;;L3 ^ SGN(M) ?
+    pxor m2, m1 ;;L4 ^ SGN(M) ?
+    paddb m0, m4 ;;X + (L3 ^ SGN(M)
+    paddb m2, m4 ;;X + (L4 ^ SGN(M)
+    pxor m0, m1 ;;(X + (L3 ^ SGN(M))^SGN(M)
+    pxor m2, m1 ;;(X + (L4 ^ SGN(M))^SGN(M)
+    mova [r3 + r1 * 2], m0 ;;(X + (L3 ^ SGN(M))^SGN(M)
+    mova [r0 + r1 * 4], m2 ;;(X + (L4 ^ SGN(M))^SGN(M)
+    RET
+;; In postprocess_template there's a seperate implementation
+;; For MMX without pavgb
+%endmacro
+=======
+    
+    mova m2, [r3] ;;L1
+    pxor m2, m7  ;;~L1
+    pavgb m2, m3 ;;(L2-L1+256)/2
+    pavgb m1, [r0] ;;(L0-L3+256)/2
+    
+>>>>>>> e8052ef... Work in progress
