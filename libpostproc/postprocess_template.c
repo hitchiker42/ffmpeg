@@ -2094,9 +2094,47 @@ static inline void RENAME(transpose2)(uint8_t *dst, int dstStride, const uint8_t
         : "%"REG_a, "%"REG_d
     );
 }
-#endif //TEMPLATE_PP_MMX
 //static long test=0;
-
+//width should be the number of blocks that are readable from src
+/*
+static inline void RENAME(transpose_blocks)(const uint8_t *src, int srcStride,
+                                            uint8_t * dst, int width){
+    int i;
+    //transpose the current blocks, plus the next block, for context
+    for(i=0;i<BLOCKS_PER_ITERATION;i++){
+//using rewritten asm transpose
+//      RENAME(transpose)(src, srcStride, dst, 8)
+        RENAME(transpose2)(src, srcStride, dst);
+        dst += 8*8;
+        src += 8*srcStride;
+    }
+    //copy the last
+    for(i=1;i<BLOCKS_PER_ITERATION;i++){
+        memcpy(dst, dst-3*8*8, 8*8);
+        dst += 8*8;
+    }
+    if(width<BLOCKS_PER_ITERATION+1){
+        //fill next block with last line of the last transposed block
+        uint8_t *last = dst - 8;
+        for(i=0;i<8;i++){
+            memcpy(dst + i*dstStride, last, 8);
+            dst += dstStride;
+        }
+    } else {
+        transpose2(src, srcStride, dst);
+    }
+}*/
+/*
+  //Need to make sure we don't write past the end of dst, when we're
+  //on the last blocks
+static inline void RENAME(transpose_back)(const uint8_t *src, uint8_t *dst,
+                                          int dstStride, int width){
+    int i;
+    for(i=0;i<BLOCKS_PER_ITERATION;i++){
+        transpose(src+4*32, 32, dst+4, dstStride);
+    }
+}*/
+#endif //TEMPLATE_PP_MMX
 #if !TEMPLATE_PP_ALTIVEC
 static inline void RENAME(tempNoiseReducer)(uint8_t *src, int stride,
                                     uint8_t *tempBlurred, uint32_t *tempBlurredPast, const int *maxNoise)
@@ -3514,6 +3552,7 @@ static void RENAME(postProcess)(const uint8_t src[], int srcStride, uint8_t dst[
                     }
                 }
 #if TEMPLATE_PP_MMX
+//                RENAME(transpose_blocks)(
               RENAME(transpose1)(tempBlock1, tempBlock2, dstBlock, dstStride);
 #endif
               /* check if we have a previous block to deblock it with dstBlock */
@@ -3530,8 +3569,8 @@ static void RENAME(postProcess)(const uint8_t src[], int srcStride, uint8_t dst[
                   } else if(mode & H_A_DEBLOCK){
                       RENAME(do_a_deblock)(tempBlock1, 16, 1, &c, mode);
                   }
-
-                  RENAME(transpose2)(dstBlock-4, dstStride, tempBlock1 + 4*16);
+                  ff_transpose_mmx2(tempBlock1+4*16, 16, dstBlock-4, dstStride);
+//                  RENAME(transpose2)(dstBlock-4, dstStride, tempBlock1 + 4*16);
 
 #else
                   if(mode & H_X1_FILTER){

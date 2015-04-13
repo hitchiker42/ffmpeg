@@ -42,7 +42,7 @@
     mova m12, m8
 
     punpcklbw m2, m3 ;2,3 L
-    punpcklhw m9, m3 ;2,3 H
+    punpckhbw m9, m3 ;2,3 H
 
     punpcklbw m4, m5 ;4,5 L
     punpckhbw m10, m5 ;4,5 L
@@ -153,7 +153,7 @@
     mova m7, m6
 
     punpckldq m2, m0 ;0T
-    punpckhqd m5, m0 ;1T
+    punpckhdq m5, m0 ;1T
     punpckldq m6, m1 ;2T
     punpckhdq m7, m1 ;3T
 
@@ -184,7 +184,7 @@
 
 
 %macro gen_transpose 0
-%if ARCH_X86_64 && cpuflags(sse2)
+%if num_mmregs == 16
 cglobal transpose, 4, 6, 16 ;src,src-stride, dst,dst-stride
     lea r4, [r0 + r1]
     lea r5, [r4 + r1]
@@ -210,8 +210,7 @@ cglobal transpose, 4, 6, 16 ;src,src-stride, dst,dst-stride
     mova [r5], m4
     mova [r5 + r3], m6
     mova [r5 + 2*r3], m7
-
-RET
+    RET
 %else ;;ARCH_x86_32 || mmx
 cglobal transpose, 4, 6, 8, 4*mmsize ;src,src-stride, dst,dst-stride
     lea r4, [r0 + r1]
@@ -234,7 +233,8 @@ cglobal transpose, 4, 6, 8, 4*mmsize ;src,src-stride, dst,dst-stride
     mova [r4 + 4*r3], m5
     mova [r5 + r3], m6
     mova [r5 + 2*r3], m7
-RET
+    RET
+%endif
 %endmacro
 
 ;; transpose and store 5 blocks into dst as follows:
@@ -310,3 +310,9 @@ cglobal transpose_shift, 3, 6, num_mmregs ;;src, srcStride, dst
 ; ;; for each line
 ; ;; unpcklqdq (C,D), (A,B) -> (B, D)
 ; ;; unpckhqdq (C,D), (A,B) -> (A, C)
+INIT_MMX mmx2
+gen_transpose
+INIT_XMM sse2
+gen_transpose
+INIT_YMM avx2
+gen_transpose

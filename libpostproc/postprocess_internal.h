@@ -182,4 +182,6 @@ static inline void linecpy(void *dest, const void *src, int lines, int stride) {
 }
 extern void ff_deInterlaceInterpolateLinear_mmx2(uint8_t *src, int stride);
 extern void ff_deInterlaceInterpolateCubic_mmx2(uint8_t *src, int stride);
+extern void ff_transpose_mmx2(const uint8_t *src, int srcStride,
+                              uint8_t *dst, int dstStride);
 #endif /* POSTPROC_POSTPROCESS_INTERNAL_H */
