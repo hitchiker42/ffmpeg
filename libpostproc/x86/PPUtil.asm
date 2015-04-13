@@ -30,7 +30,7 @@
 %if cpuflag(avx2)
     vpermq %1, %1, 0x00
 %elif cpuflag(sse2)
-    pshufd %1, %1, 0b1010
+    pshufd %1, %1, 00001010b
 %endif
 %endmacro
 ;; copy low byte into all other bytes
