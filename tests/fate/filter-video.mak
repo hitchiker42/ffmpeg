@@ -262,6 +262,7 @@ fate-filter-pad: CMD = video_filter "pad=iw*1.5:ih*1.5:iw*0.3:ih*0.2"
 FATE_FILTER_PP = fate-filter-pp fate-filter-pp1 fate-filter-pp2 fate-filter-pp3 fate-filter-pp4 fate-filter-pp5 fate-filter-pp6
 FATE_FILTER_VSYNTH-$(CONFIG_PP_FILTER) += $(FATE_FILTER_PP)
 $(FATE_FILTER_PP): fate-vsynth1-mpeg4-qprd
+$(FATE_FILTER_PP_CMP): fate-vsynth1-mpeg4-qprd
 
 fate-filter-pp:  CMD = framecrc -flags bitexact -idct simple -i $(TARGET_PATH)/tests/data/fate/vsynth1-mpeg4-qprd.avi -vframes 5 -flags +bitexact -vf "pp=be/hb/vb/tn/l5/al"
 fate-filter-pp1: CMD = video_filter "pp=fq|4/be/hb/vb/tn/l5/al"
@@ -270,6 +271,30 @@ fate-filter-pp3: CMD = video_filter "qp=x+y,pp=be/ha|128|7/va/li"
 fate-filter-pp4: CMD = video_filter "pp=be/ci"
 fate-filter-pp5: CMD = video_filter "pp=md"
 fate-filter-pp6: CMD = video_filter "pp=be/fd"
+#functon, pass as arguments num, filter, target, tolerance
+define FILTER_PP_CMP
+fate-filter-pp$(1)-cmp: CMD = ffmpeg -cpuflags all -idct simple -f image2 -vcodec pgmyuv -i $(TARGET_PATH)/tests/vsynth1/%02d.pgm -vf $(2) -vcodec rawvideo -f nut -
+fate-filter-pp$(1)-cmp: CMP = stddev
+fate-filter-pp$(1)-cmp: CMP_TARGET = $(3)
+fate-filter-pp$(1)-cmp: SIZE_TOLERANCE = $(4)
+fate-filter-pp$(1)-cmp: FUZZ = 0.1
+fate-filter-pp$(1)-cmp: REF = $(TARGET_PATH)/tests/data/fate/filter-pp$(1)-cmp.nut
+endef
+
+PP_FILTER_1="pp=fq|4hb/vb/tn/l5/al"
+PP_FILTER_2:="qp=x+y,pp=h1/v1/lb"
+PP_FILTER_3:="qp=x+y,pp=ha|128|7/va/li"
+PP_FILTER_4:="pp=ci"
+PP_FILTER_5:="pp=md"
+PP_FILTER_6:="pp=fd"
+$(call FILTER_PP_CMP, 1, $(PP_FILTER_1), 4.45, 1024)
+$(call FILTER_PP_CMP, 2, $(PP_FILTER_2), 1.51, 1024)
+$(call FILTER_PP_CMP, 3, $(PP_FILTER_3), 0.37, 1204)
+$(call FILTER_PP_CMP, 4, $(PP_FILTER_4), 0.88, 1024)
+$(call FILTER_PP_CMP, 5, $(PP_FILTER_5), 0.00, 1024)
+$(call FILTER_PP_CMP, 6, $(PP_FILTER_6), 5.12, 1024)
+FATE_FILTER_PP_CMP = fate-filter-pp1-cmp fate-filter-pp2-cmp fate-filter-pp3-cmp fate-filter-pp4-cmp fate-filter-pp5-cmp fate-filter-pp6-cmp
+FATE_FILTER_VSYNTH-$(CONFIG_PP_FILTER) += $(FATE_FILTER_PP_CMP)
 
 FATE_FILTER_VSYNTH-$(call ALLYES, QP_FILTER PP_FILTER) += fate-filter-qp
 fate-filter-qp: CMD = video_filter "qp=17,pp=be/hb/vb/tn/l5/al"
