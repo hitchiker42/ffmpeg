@@ -3374,6 +3374,46 @@ static inline void RENAME(deInterlace)(uint8_t *dstBlock, int dstStride,
                               c.deintTemp + x, c.deintTemp + width + x);
     }
 }
+/*
+  This is temporary.
+  Get around the issues with inline avx by using an explicit register
+  and simplify code by abstracting simd detail like in yasm code
+*/
+#if TEMPLATE_PP_MMX
+static inline void RENAME(packQP)(PPContext *c)
+{
+#undef M0
+#undef MOVA
+#if TEMPLATE_PP_AVX2
+#define M0 "%%ymm0"
+#define MOVA "vmovdqa"
+#elif TEMPLATE_PP_SSE2
+#define M0 "%%xmm0"
+#define MOVA "movdqa"
+#else
+#define M0 "%%mm0"
+#define MOVA "movq"
+#endif
+    __asm__ volatile(
+        "movd %1, "M0"\n\t"
+#if TEMPLATE_PP_AVX2 //copy low 128 bits to high 128 bits
+        "vpermq "M0", "M0", $0 \n\t"
+#endif
+        "punpcklbw "M0", "M0"  \n\t" // 0, 0, 0, 0, 0, 0, OP, QP
+        "punpcklwd "M0", "M0"  \n\t" // 0, 0, 0, 0, 0, 0, QP, QP
+        "punpckldq "M0", "M0"  \n\t" //QP,...,QP
+#if TEMPLATE_PP_SSE2
+        "punpcklqdq"M0", "M0"  \n\t" //copy to upper quadword(s)
+#endif
+        MOVA" "M0", %0"
+        : "=m" (c.pQPb_block)
+        : "r" (c.QP_block)
+        : M0
+    );
+#undef M0
+#undef MOVA
+}
+#endif
 /**
  * Filter array of bytes (Y or U or V values)
  */
@@ -3602,19 +3642,10 @@ static void RENAME(postProcess)(const uint8_t src[], int srcStride, uint8_t dst[
                 }
                 c.QP_block[qp_index] = QP;
                 c.nonBQP_block[qp_index] = nonBQP;
-
-#if TEMPLATE_PP_MMX
-                __asm__ volatile(
-                    "movd %1, %%mm7         \n\t"
-                    "packuswb %%mm7, %%mm7  \n\t" // 0, 0, 0, QP, 0, 0, 0, QP
-                    "packuswb %%mm7, %%mm7  \n\t" // 0,QP, 0, QP, 0,QP, 0, QP
-                    "packuswb %%mm7, %%mm7  \n\t" // QP,..., QP
-                    "movq %%mm7, %0         \n\t"
-                    : "=m" (c.pQPb_block[qp_index])
-                    : "r" (QP)
-                );
-#endif
             }
+#if TEMPLATE_PP_MMX
+            RENAME(packQP)(&c);
+#endif
             for(;x<endx;x+=BLOCK_SIZE){
                 prefetchnta(srcBlock + (((x>>2)&6) + copyAhead)*srcStride + 32);
                 prefetchnta(srcBlock + (((x>>2)&6) + copyAhead+1)*srcStride + 32);
