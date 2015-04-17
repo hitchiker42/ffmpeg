@@ -1,0 +1,38 @@
+* For now postpone work on the postproc_simd branch
+  I don't have time to re-organize the code in the way I want before I need to
+  have something done. So just put that off untill the summer (hopefully)
+* Check asm code for any rounding errors
+  These are most likely due to re-orginization of instructions,
+  or the use of different instructions in sse/avx code
+* See if processing multiple blocks in parallel is changing the results
+  If so email michael and tell him, since there's nothing I can do about that.
+
+  The reason for this is that some filters read from earlier lines for
+  interpolation, etc and if blocks are processed linearly those lines have
+  already been processed, if blocks are processed in parallel those lines might
+  not be processed yet.
+
+  This is something that is inherent to vectorizing the code.
+
+* Make sure that the code I add passes all currently existing tests
+  Increasing the test coverage is something I would like to do, but I don't
+  need to do it right now, and all my code should have to do is work with the
+  current tests.
+
+* Try and clean up the mess of code I added to get simd working
+  This is actually not super important, Ideally this code is just going to be
+  temporary and so who cares if it's ugly, but cleaning it up should help
+  in debugging so it's somewhat important
+
+* Actual TODO list
+** See if processisng blocks in parallel causes inherent error and
+   if so send an email about it.
+** Reorganize my asm code to match the inline asm and possibly elimnate 
+   rounding errors.
+** Rebase the gsoc_qualification branch 
+   Add in some more code from postproc_simd, specifically the code that moves
+   the inline asm for packing qp.
+** If possible get the gsoc_qualification code to pass tests
+   It might not be possible due to the parallel blocks thing mentioned earlier
+** Ensure all patches from gsoc_qualificatiaon apply cleanly
+   also ensure each patch leaves the code in a working state (i.e passes all tests)
