@@ -3374,6 +3374,32 @@ static inline void RENAME(deInterlace)(uint8_t *dstBlock, int dstStride,
                               c.deintTemp + x, c.deintTemp + width + x);
     }
 }
+static inline void RENAME(deBlock)(uint8_t *dstBlock, int stride,
+                                   int step, PPContext *c, int mode)
+{
+    if(mode & V_X1_FILTER){
+        RENAME(vertX1Filter)(dstBlock, stride, &c);
+    } else if(mode & V_DEBLOCK){
+        const int t = RENAME(vertClassify)(dstBlock, stride, &c);
+        if(t == 1){
+            RENAME(doVertLowPass)(dstBLock, stride, c);
+        /*for simd if(t & 0x01010101){
+          int mask = t & 0x01010101 //mask away any 2s
+          //in asm
+          shuffle mask so each quadword is filled with the corresponding bytes
+          shift each byte left by 7 bits (so the lowest bit is now the highest bit)
+          Need to figure out how to do this
+          process
+          use maskmovdqu
+          */
+        } else if(t == 2){
+        //for simd if(t & 0x02020202){ //no else
+            RENAME(doVertDefFilter)(dstBlock, stride, c);
+        } 
+    } else if(mode & V_A_DEBLOCK){
+        RENAME(do_a_deblock)(dstBlock, stride, step, c, mode);
+    }
+}
 /*
   This is temporary.
   Get around the issues with inline avx by using an explicit register
@@ -3707,7 +3733,6 @@ static void RENAME(postProcess)(const uint8_t src[], int srcStride, uint8_t dst[
                       RENAME(vertX1Filter)(dstBlock, stride, &c);
                   } else if(mode & V_DEBLOCK){
                       const int t= RENAME(vertClassify)(dstBlock, stride, &c);
-
                       if(t==1)
                           RENAME(doVertLowPass)(dstBlock, stride, &c);
                       else if(t==2)

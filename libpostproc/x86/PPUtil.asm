@@ -178,6 +178,12 @@ SECTION_RODATA 32
 %macro phmaxub 2
     horiz_min_max_ub %1,%2,pmaxub
 %endmacro
+
+;;%macro store_selected_quadword 3 ;;dst, src, mask (0-3)
+;;maskmovdqu uses e/rdi implicitly
+;;    mov rdi,%1
+    
+    
 ;; define packed conditional moves, of the form:
 ;; pcmovXXS dst, src, arg1, arg2, tmp
 ;; where XX is a comparision (eq,ne,gt,...) and S is a size(b,w,d,q)
