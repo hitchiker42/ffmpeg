@@ -20,7 +20,7 @@
 ;* along with FFmpeg; if not, write to the Free Software
 ;* Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 ;*
-
+%include "PPUtil.asm"
 ;; void duplicate(uint8 *src, int stride)
 ;; duplicate block_size pixels 5 times upwards
 ;; this should probably ultimately be inlined
@@ -41,7 +41,7 @@ cglobal duplicate, 2, 2, 1
 ;;                int level_fix, int64_t *packed_offset_and_scale)
 ;; Copy src to dst, and possibly fix the brightness
 %macro gen_block_copy 0
-cglobal block_copy, 6, 6, 8
+cglobal blockCopy, 6, 6, 8
     test r4, r4
     jz .simple
     mova m5, [r5] ;;offset
@@ -58,15 +58,15 @@ cglobal block_copy, 6, 6, 8
     mova m3, m2
 %assign i 0
 %rep 4
-    punpcklbw m%i,m%i
-    pmulhuw m%i, m6
-    psubw m%i, m5
+    punpcklbw m %+ i,m %+ i
+    pmulhuw m %+ i, m6
+    psubw m %+ i, m5
 %assign i i+1
 %endrep
     packuswb m0, m1
     packuswb m2, m3
-    mova [%3], m0
-    mova [%4], m2
+    mova %3, m0
+    mova %4, m2
 %endmacro
 %endif
     scaled_copy [r0], [r0 + r1], [r2], [r2 + r3]
@@ -102,3 +102,19 @@ cglobal block_copy, 6, 6, 8
 .end:
     REP_RET
 %endmacro
+
+INIT_MMX mmx2
+gen_duplicate
+gen_block_copy
+
+INIT_XMM sse2
+gen_duplicate
+gen_block_copy
+
+INIT_YMM avx2
+gen_duplicate
+gen_block_copy
+
+
+
+

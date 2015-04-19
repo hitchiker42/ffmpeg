@@ -115,13 +115,6 @@
 #endif
 //inline wrapper functions around the yasm simd code
 #if TEMPLATE_PP_SSE2
-#if TEMPLATE_PP_SSE2
-
-
-#if !TEMPLATE_PP_AVX2
-
-#endif
-#else
 extern void RENAME(ff_deInterlaceInterpolateLinear)(uint8_t *, int);
 extern void RENAME(ff_deInterlaceInterpolateCubic)(uint8_t *, int);
 extern void RENAME(ff_deInterlaceFF)(uint8_t *, int, uint8_t *);
@@ -130,7 +123,7 @@ extern void RENAME(ff_deInterlaceBlendLinear)(uint8_t *, int, uint8_t *);
 extern void RENAME(ff_deInterlaceMedian)(uint8_t *, int);
 extern void RENAME(ff_blockCopy)(uint8_t*,int,const uint8_t*,
                                  int,int,int64_t*);
-extern void RENAME(ff_duplicate)(uint8_t, int);
+extern void RENAME(ff_duplicate)(uint8_t*, int);
 static inline void RENAME(deInterlaceInterpolateLinear)(uint8_t src[],
                                                         int stride)
 {
@@ -167,7 +160,7 @@ static inline void RENAME(blockCopy)(uint8_t dst[], int dstStride,
     RENAME(ff_blockCopy)(dst,dstStride,src,srcStride,
                          levelFix,packedOffsetAndScale);
 }
-static inline void RENAME(duplicate)(uint8_t src, int stride){
+static inline void RENAME(duplicate)(uint8_t* src, int stride){
     RENAME(ff_duplicate)(src, stride);
 }
 /*
@@ -1598,7 +1591,6 @@ static inline void RENAME(deInterlaceInterpolateLinear)(uint8_t src[], int strid
     }
 #endif
 }
-#endif
 /**
  * Deinterlace the given block by cubic interpolating every second line.
  * will be called for every 8x8 block and can read & write from line 4-15
@@ -1685,7 +1677,6 @@ DEINT_CUBIC((%%REGd, %1), (%0, %1, 8) , (%%REGd, %1, 4), (%%REGc)    , (%%REGc, 
     }
 #endif //TEMPLATE_PP_SSE2 || TEMPLATE_PP_MMXEXT || TEMPLATE_PP_3DNOW
 }
-#endif
 /**
  * Deinterlace the given block by filtering every second line with a (-1 4 2 4 -1) filter.
  * will be called for every 8x8 block and can read & write from line 4-15
@@ -1764,7 +1755,7 @@ DEINT_FF((%%REGd, %1), (%%REGd, %1, 2), (%0, %1, 8) , (%%REGd, %1, 4))
     }
 #endif //TEMPLATE_PP_MMXEXT || TEMPLATE_PP_3DNOW
 }
-#endif
+
 /**
  * Deinterlace the given block by filtering every line with a (-1 2 6 2 -1) filter.
  * will be called for every 8x8 block and can read & write from line 4-15
@@ -1865,7 +1856,6 @@ DEINT_L5(%%mm1, %%mm0, (%%REGd, %1, 2), (%0, %1, 8)    , (%%REGd, %1, 4))
     }
 #endif //(TEMPLATE_PP_MMXEXT || TEMPLATE_PP_3DNOW) && HAVE_6REGS
 }
-#endif
 /**
  * Deinterlace the given block by filtering all lines with a (1 2 1) filter.
  * will be called for every 8x8 block and can read & write from line 4-15
@@ -1967,7 +1957,6 @@ static inline void RENAME(deInterlaceBlendLinear)(uint8_t src[], int stride, uin
     }
 #endif //TEMPLATE_PP_MMXEXT || TEMPLATE_PP_3DNOW
 }
-#endif
 /**
  * Deinterlace the given block by applying a median filter to every second line.
  * will be called for every 8x8 block and can read & write from line 4-15,
@@ -2090,7 +2079,6 @@ MEDIAN((%%REGd, %1), (%%REGd, %1, 2), (%0, %1, 8))
     }
 #endif //TEMPLATE_PP_MMX
 }
-#endif
 #if TEMPLATE_PP_MMX
 /**
  * Transpose and shift the given 8x8 Block into dst1 and dst2.
@@ -3319,7 +3307,6 @@ SIMPLE_CPY((%%REGa, %2), (%%REGa, %2, 2), (%%REGd, %3), (%%REGd, %3, 2))
 #endif //TEMPLATE_PP_MMX && HAVE_6REGS
     }
 }
-#endif
 /**
  * Duplicate the given 8 src pixels ? times upward
  */
@@ -3347,7 +3334,8 @@ static inline void RENAME(duplicate)(uint8_t src[], int stride)
 #endif
 }
 #endif //initial TEMPLATE_PP_SSE2
-static inline void RENAME(deInterlace)(uint8_t *dstBlock, int dstStride,
+static inline void RENAME(deInterlace)(const uint8_t *srcBlock, int srcStride,
+                                       uint8_t *dstBlock, int dstStride,
                                        uint8_t *tmp, uint8_t *tmp2,
                                        int mode, int copyAhead,
                                        PPContext *c, const int duplicate)
@@ -3355,25 +3343,25 @@ static inline void RENAME(deInterlace)(uint8_t *dstBlock, int dstStride,
 
     RENAME(blockCopy)(dstBlock + dstStride*copyAhead, dstStride,
                       srcBlock + srcStride*copyAhead, srcStride,
-                      mode & LEVEL_FIX, &c.packedYOffset);
+                      mode & LEVEL_FIX, &c->packedYOffset);
     if(duplicate){
         RENAME(duplicate)(dstBlock + dstStride*8, dstStride);
     }
     if(mode & LINEAR_IPOL_DEINT_FILTER){
         RENAME(deInterlaceInterpolateLinear)(dstBlock, dstStride);
     } else if(mode & LINEAR_BLEND_DEINT_FILTER){
-        RENAME(deInterlaceBlendLinear)(dstBlock, dstStride, c.deintTemp + x);
+        RENAME(deInterlaceBlendLinear)(dstBlock, dstStride, tmp);
     } else if(mode & MEDIAN_DEINT_FILTER){
         RENAME(deInterlaceMedian)(dstBlock, dstStride);
     } else if(mode & CUBIC_IPOL_DEINT_FILTER){
         RENAME(deInterlaceInterpolateCubic)(dstBlock, dstStride);
     } else if(mode & FFMPEG_DEINT_FILTER){
-        RENAME(deInterlaceFF)(dstBlock, dstStride, c.deintTemp + x);
+        RENAME(deInterlaceFF)(dstBlock, dstStride, tmp);
     } else if(mode & LOWPASS5_DEINT_FILTER){
-        RENAME(deInterlaceL5)(dstBlock, dstStride,
-                              c.deintTemp + x, c.deintTemp + width + x);
+        RENAME(deInterlaceL5)(dstBlock, dstStride, tmp, tmp2);
     }
 }
+/*
 static inline void RENAME(deBlock)(uint8_t *dstBlock, int stride,
                                    int step, PPContext *c, int mode)
 {
@@ -3383,15 +3371,15 @@ static inline void RENAME(deBlock)(uint8_t *dstBlock, int stride,
         const int t = RENAME(vertClassify)(dstBlock, stride, &c);
         if(t == 1){
             RENAME(doVertLowPass)(dstBLock, stride, c);
-        /*for simd if(t & 0x01010101){
+//        for simd if(t & 0x01010101){
           int mask = t & 0x01010101 //mask away any 2s
           //in asm
-          shuffle mask so each quadword is filled with the corresponding bytes
-          shift each byte left by 7 bits (so the lowest bit is now the highest bit)
-          Need to figure out how to do this
-          process
-          use maskmovdqu
-          */
+//          shuffle mask so each quadword is filled with the corresponding bytes
+//          shift each byte left by 7 bits (so the lowest bit is now the highest bit)
+//          Need to figure out how to do this
+//          process
+//          use maskmovdqu
+
         } else if(t == 2){
         //for simd if(t & 0x02020202){ //no else
             RENAME(doVertDefFilter)(dstBlock, stride, c);
@@ -3400,6 +3388,7 @@ static inline void RENAME(deBlock)(uint8_t *dstBlock, int stride,
         RENAME(do_a_deblock)(dstBlock, stride, step, c, mode);
     }
 }
+*/
 /*
   This is temporary.
   Get around the issues with inline avx by using an explicit register
@@ -3408,36 +3397,43 @@ static inline void RENAME(deBlock)(uint8_t *dstBlock, int stride,
 #if TEMPLATE_PP_MMX
 static inline void RENAME(packQP)(PPContext *c)
 {
-#undef M0
-#undef MOVA
 #if TEMPLATE_PP_AVX2
-#define M0 "%%ymm0"
-#define MOVA "vmovdqa"
-#elif TEMPLATE_PP_SSE2
-#define M0 "%%xmm0"
+    __asm__ volatile(
+        "vmovdqa (%1), %%ymm0\n\t"
+        "vpermq $0, %%ymm0, %%ymm0 \n\t"
+        "vpunpcklbw %%ymm0, %%ymm0, %%ymm0  \n\t" // 0, 0, 0, 0, 0, 0, OP, QP
+        "vpunpcklwd %%ymm0, %%ymm0, %%ymm0  \n\t" // 0, 0, 0, 0, 0, 0, QP, QP
+        "vpunpckldq %%ymm0, %%ymm0, %%ymm0  \n\t" //QP,...,QP
+        "vpunpcklqdq %%ymm0, %%ymm0, %%ymm0  \n\t" //copy to upper quadword(s)
+        "vmovdqa %%ymm0, %0"
+        : "=m" (c->pQPb_block)
+        : "r" (c->QP_block)
+        : "%ymm0"
+    );
+#else
+#if TEMPLATE_PP_SSE2
+#define M0 "%xmm0"
 #define MOVA "movdqa"
 #else
-#define M0 "%%mm0"
+#define M0 "%mm0"
 #define MOVA "movq"
 #endif
     __asm__ volatile(
-        "movd %1, "M0"\n\t"
-#if TEMPLATE_PP_AVX2 //copy low 128 bits to high 128 bits
-        "vpermq "M0", "M0", $0 \n\t"
-#endif
-        "punpcklbw "M0", "M0"  \n\t" // 0, 0, 0, 0, 0, 0, OP, QP
-        "punpcklwd "M0", "M0"  \n\t" // 0, 0, 0, 0, 0, 0, QP, QP
-        "punpckldq "M0", "M0"  \n\t" //QP,...,QP
+        MOVA" (%1), %"M0"\n\t"
+        "punpcklbw %"M0", %"M0"  \n\t" // 0, 0, 0, 0, 0, 0, OP, QP
+        "punpcklwd %"M0", %"M0"  \n\t" // 0, 0, 0, 0, 0, 0, QP, QP
+        "punpckldq %"M0", %"M0"  \n\t" //QP,...,QP
 #if TEMPLATE_PP_SSE2
-        "punpcklqdq"M0", "M0"  \n\t" //copy to upper quadword(s)
+        "punpcklqdq %"M0", %"M0"  \n\t" //copy to upper quadword(s)
 #endif
-        MOVA" "M0", %0"
-        : "=m" (c.pQPb_block)
-        : "r" (c.QP_block)
+        MOVA" %"M0", %0"
+        : "=m" (c->pQPb_block)
+        : "r" (c->QP_block)
         : M0
     );
 #undef M0
 #undef MOVA
+#endif
 }
 #endif
 /**
@@ -3557,10 +3553,6 @@ static void RENAME(postProcess)(const uint8_t src[], int srcStride, uint8_t dst[
         c.packedYOffset= 0;
         QPCorrecture= 256*256;
     }
-#if TEMPLATE_PP_SSE2
-#undef RENAME
-#define RENAME(x) x ## _mmx2
-#endif
     /* copy & deinterlace first row of blocks */
     y=-BLOCK_SIZE;
     {
@@ -3577,30 +3569,35 @@ static void RENAME(postProcess)(const uint8_t src[], int srcStride, uint8_t dst[
             prefetcht0(dstBlock + (((x>>2)&6) + copyAhead+1)*dstStride + 32);
 #if TEMPLATE_PP_AVX2
             if(x + BLOCK_SIZE*4 <= width){
-                RENAME(deInterlace)(dstBlock, dstStride, c.deintTemp +x,
-                                    c.deintTemp + width + x, mode, 8, &c, 1);
+                RENAME(deInterlace)(srcBlock, srcStride, dstBlock, dstStride,
+                                    c.deintTemp +x, c.deintTemp + width + x,
+                                    mode, 8, &c, 1);
                 dstBlock+=24;
                 srcBlock+=24;
                 //kinda hacky but ohwell
                 x+=3*BLOCK_SIZE;
             } else {
-                deInterlace_MMX2(dstBlock, dstStride, c.deintTemp +x,
-                                 c.deintTemp + width + x, mode, 8, &c, 1);
+                deInterlace_MMX2(srcBlock, srcStride, dstBlock, dstStride,
+                                 c.deintTemp +x, c.deintTemp + width + x,
+                                 mode, 8, &c, 1);
             }
 #elif TEMPLATE_PP_SSE2
             if(x + BLOCK_SIZE*2 <= width){
-                RENAME(deInterlace)(dstBlock, dstStride, c.deintTemp +x,
-                                    c.deintTemp + width + x, mode, 8, &c, 1);
+                RENAME(deInterlace)(srcBlock, srcStride, dstBlock, dstStride,
+                                    c.deintTemp +x, c.deintTemp + width + x,
+                                    mode, 8, &c, 1);
                 dstBlock+=8;
                 srcBlock+=8;
                 x+=BLOCK_SIZE;
             } else {
-                deInterlace_MMX2(dstBlock, dstStride, c.deintTemp +x,
-                                 c.deintTemp + width + x, mode, 8, &c, 1);
+                deInterlace_MMX2(srcBlock, srcStride, dstBlock, dstStride,
+                                c.deintTemp +x, c.deintTemp + width + x,
+                                mode, 8, &c, 1);
             }
 #else
-            RENAME(deInterlace)(dstBlock, dstStride, c.deintTemp +x,
-                                c.deintTemp + width + x, mode, 8, &c, 1);
+            RENAME(deInterlace)(srcBlock, srcStride, dstBlock, dstStride,
+                                c.deintTemp +x, c.deintTemp + width + x,
+                                mode, 8, &c, 1);
 #endif
             dstBlock+=8;
             srcBlock+=8;
@@ -3679,30 +3676,35 @@ static void RENAME(postProcess)(const uint8_t src[], int srcStride, uint8_t dst[
                 prefetcht0(dstBlock + (((x>>2)&6) + copyAhead+1)*dstStride + 32);
 #if TEMPLATE_PP_AVX2
             if(x + BLOCK_SIZE*4 <= endx){
-                RENAME(deInterlace)(dstBlock, dstStride, c.deintTemp +x,
-                                    c.deintTemp + width + x, mode, 8, &c, 1);
+                RENAME(deInterlace)(srcBlock, srcStride, dstBlock, dstStride,
+                                    c.deintTemp +x, c.deintTemp + width + x,
+                                    mode, 8, &c, 0);
                 dstBlock+=24;
                 srcBlock+=24;
                 //kinda hacky but ohwell
                 x+=3*BLOCK_SIZE;
             } else {
-                deInterlace_MMX2(dstBlock, dstStride, c.deintTemp +x,
-                                 c.deintTemp + width + x, mode, 8, &c, 1);
+                deInterlace_MMX2(srcBlock, srcStride, dstBlock, dstStride,
+                                c.deintTemp +x, c.deintTemp + width + x,
+                                mode, 8, &c, 0);
             }
 #elif TEMPLATE_PP_SSE2
             if(x + BLOCK_SIZE*2 <= endx){
-                RENAME(deInterlace)(dstBlock, dstStride, c.deintTemp +x,
-                                    c.deintTemp + width + x, mode, 8, &c, 1);
+                RENAME(deInterlace)(srcBlock, srcStride, dstBlock, dstStride,
+                                    c.deintTemp +x, c.deintTemp + width + x,
+                                    mode, 8, &c, 0);
                 dstBlock+=8;
                 srcBlock+=8;
                 x+=BLOCK_SIZE;
             } else {
-                deInterlace_MMX2(dstBlock, dstStride, c.deintTemp +x,
-                                 c.deintTemp + width + x, mode, 8, &c, 1);
+                deInterlace_MMX2(srcBlock, srcStride, dstBlock, dstStride,
+                                c.deintTemp +x, c.deintTemp + width + x,
+                                mode, 8, &c, 0);
             }
 #else
-            RENAME(deInterlace)(dstBlock, dstStride, c.deintTemp +x,
-                                c.deintTemp + width + x, mode, 8, &c, 1);
+            RENAME(deInterlace)(srcBlock, srcStride, dstBlock, dstStride,
+                                c.deintTemp +x, c.deintTemp + width + x,
+                                mode, 8, &c, 0);
 #endif
             dstBlock+=8;
             srcBlock+=8;
