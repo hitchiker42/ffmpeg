@@ -18,19 +18,6 @@
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
  */
 #include "simd_filter_test.h"
-void run_deint_filter(deinterlace_filter filter, uint8_t *src, int stride,
-                      uint8_t *tmp, uint8_t *tmp2){
-    if(filter.tmp2){
-        ((void(*)(uint8_t*,int,uint8_t*,uint8_t*))
-         (filter.filter))(src, stride, tmp, tmp2);
-    } else if (filter.tmp){
-        ((void(*)(uint8_t*,int,uint8_t*))
-         (filter.filter))(src, stride, tmp);
-    } else {
-        ((void(*)(uint8_t*,int))
-         (filter.filter))(src, stride);
-    }
-}
 static inline __attribute__((const))
 uint8_t av_clip_uint8(int a){
     if (a&(~0xFF)) return (-a)>>31;
@@ -100,6 +87,19 @@ static const deinterlace_filter avx2_filters[6] = {
     {deInterlaceMedian_avx2,0,0}};
 static deinterlace_filter *filters[5]={C_filters, mmx2_filters,MMX2_filters,
                                        sse2_filters, avx2_filters};
+void run_deint_filter(deinterlace_filter filter, uint8_t *src, int stride,
+                      uint8_t *tmp, uint8_t *tmp2){
+    if(filter.tmp2){
+        ((void(*)(uint8_t*,int,uint8_t*,uint8_t*))
+         (filter.filter))(src, stride, tmp, tmp2);
+    } else if (filter.tmp){
+        ((void(*)(uint8_t*,int,uint8_t*))
+         (filter.filter))(src, stride, tmp);
+    } else {
+        ((void(*)(uint8_t*,int))
+         (filter.filter))(src, stride);
+    }
+}
 static uint8_t *generate_test_blocks(){
     //generate various blocks to use in comparing simd and non-simd code
     //initialize the rng with a constant to ensure consistant test results
@@ -146,7 +146,7 @@ static uint8_t *generate_test_blocks(){
     //generate blocks with all bits set (check overflow/saturation), ostensably the
     //deinterlace filters shouldn't change these at all
     for(i=0;i<64;i++){
-        *lineptr ++=  0xffffffffffffffff;
+        *lineptr++ =  0xffffffffffffffff;
     }//4*8*8*8 + 2*8*256 bytes = 8*256 + 16*256 = 24*256 = 6*1024 = 6K
     uint32_t *rand_ptr = (uint32_t*)lineptr;
 //fill the given number of blocks with random data
@@ -189,21 +189,32 @@ void write_data_to_file(char *outfile_name, uint8_t *blocks,
         close(fd);
     }
 }
+/*
+  This writes data out in rows of 32 bytes, i.e 4 blocks per row.
+  Each block (in a row) is seperated by a '|' and each set of 4 blocks
+  is seperated by a blank line
+  
+*/
 void write_data_as_text(char *outfile_name, uint8_t *blocks, int num_blocks){
     int i,j,k;
     char *tmp_lines[4];
     for(i=0;i<4;i++){
-        tmp_lines[i]=calloc(1,36);
+        tmp_lines[i]=calloc(1,40);
     }
     FILE *outfile = fopen(outfile_name, "w");
     for(i=0;i<num_blocks;i++){
         for(k=0;k<8;k++){
             for(j=0;j<8;j++){
+                char comma = (j==7 ? ' ': ',');
                 //really slow
-                snprintf(tmp_lines[0]+(j*4),4,"%-4hhu",blocks[i*64 + k*32 +j]);
-                snprintf(tmp_lines[1]+(j*4),4,"%-4hhu",blocks[(i+1)*64 + k*32 + j]);
-                snprintf(tmp_lines[2]+(j*4),4,"%-4hhu",blocks[(i+2)*64 + k*32 +j]);
-                snprintf(tmp_lines[3]+(j*4),4,"%-4hhu",blocks[(i+3)*64 + k*32 +j]);
+                snprintf(tmp_lines[0]+(j*4),5,"%3hhu%c",
+                         blocks[i*64 + k*32 +j],comma);
+                snprintf(tmp_lines[1]+(j*4),5,"%3hhu%c",
+                         blocks[(i+1)*64 + k*32 + j],comma);
+                snprintf(tmp_lines[2]+(j*4),5,"%3hhu%c",
+                         blocks[(i+2)*64 + k*32 +j],comma);
+                snprintf(tmp_lines[3]+(j*4),5,"%3hhu%c",
+                         blocks[(i+3)*64 + k*32 +j],comma);
             }
             fprintf(outfile,"%s | %s | %s | %s\n",
                     tmp_lines[0],tmp_lines[1],tmp_lines[2],tmp_lines[3]);
@@ -211,7 +222,36 @@ void write_data_as_text(char *outfile_name, uint8_t *blocks, int num_blocks){
         fprintf(outfile, "\n");
     }
 }
-
+//allocate a PPContext struct and initialize any fields that may be needed
+PPContext *allocate_PPContext(){
+    PPContext *c = malloc(sizeof(PPContext));
+//defaults taken from postprocess.c    
+    c->ppMode.lumMode= 0;
+    c->ppMode.chromMode= 0;
+    c->ppMode.maxTmpNoise[0]= 700;
+    c->ppMode.maxTmpNoise[1]= 1500;
+    c->ppMode.maxTmpNoise[2]= 3000;
+    c->ppMode.maxAllowedY= 234;
+    c->ppMode.minAllowedY= 16;
+    c->ppMode.baseDcDiff= 256/8;
+    c->ppMode.flatnessThreshold= 56-16-1;
+    c->ppMode.maxClippedThreshold= 0.01;
+    c->ppMode.error=0;
+    int i;
+    //from postprocess_template.c
+    for(i=0; i<57; i++){
+        int offset= ((i*c.ppMode.baseDcDiff)>>8) + 1;
+        int threshold= offset*2 + 1;
+        c->mmxDcOffset[i]= 0x7F - offset;
+        c->mmxDcThreshold[i]= 0x7F - threshold;
+        c->mmxDcOffset[i]*= 0x0101010101010101LL;
+        c->mmxDcThreshold[i]*= 0x0101010101010101LL;
+    }
+    return c;
+}
+//default for chroma, luma is too complicated for right now
+    c.packedYScale= 0x0100010001000100LL;
+    c.packedYOffset= 0;
 static inline uint8_t unsigned_saturate(uint64_t x){
     return x >= 0xff ? 0xff : x;
 }
@@ -240,6 +280,13 @@ void run_deint_filter_test(deinterlace_filter filter, uint8_t *blocks,
     }
     write_data_as_text(outfile_name, blocks, num_blocks);
 }
+
+/*
+  useful arguments:
+  num random blocks
+  random seed
+  select which filters to use
+*/
 int main(int argc, char **argv){
     char *outdir;
     if(argc < 2){
@@ -256,10 +303,6 @@ int main(int argc, char **argv){
             outdir = tmp;
         }
     }
-
-//    DEBUG_PRINTF("allocated blocks\n");
-
-//    DEBUG_PRINTF("generated test blocks\n");
     int outfile_size = strlen(outdir) + 64;//way more than enough space
     int i,j;
     char *data_outfiles[30];
@@ -275,12 +318,18 @@ int main(int argc, char **argv){
         }
     }
 
+/*
+  I have no idea why but I was getting an error earlier when calling
+  aligned alloc, I moved things around and that fixed it, and it seems to
+  be fine now...Weird
+*/
     uint64_t *block_sums = malloc(sizeof(uint64_t)*num_total_blocks*5);
-//    DEBUG_PRINTF("allocated block sums\n");
     uint8_t *block_avgs = malloc(sizeof(uint8_t)*num_total_blocks*5);
-//    DEBUG_PRINTF("allocated block avgs\n");
     uint8_t *blocks = aligned_alloc(32, num_total_blocks*64);
     uint8_t *blocks_src = generate_test_blocks();
+    char *input_outfile = malloc(outfile_size);
+    snprintf(input_outfile, outfile_size, "%s%s", outdir, "input_data");
+    write_data_as_text(input_outfile, blocks_src, num_total_blocks);
     __builtin_cpu_init();
     int features[5] = {1, __builtin_cpu_supports("sse"),
                        __builtin_cpu_supports("sse"),
@@ -288,8 +337,8 @@ int main(int argc, char **argv){
                        __builtin_cpu_supports("avx2")};
     for(i=0;i<6;i++){
         DEBUG_PRINTF("Running %s filters\n", deint_filter_names[i]);
-        memset(block_sums, '\0', sizeof(uint64_t)*num_total_blocks*4);
-        memset(block_avgs, '\0', sizeof(uint8_t)*num_total_blocks*4);
+        memset(block_sums, '\0', sizeof(uint64_t)*num_total_blocks*5);
+        memset(block_avgs, '\0', sizeof(uint8_t)*num_total_blocks*5);
         for(j=0;j<5;j++){
             if(features[j]){
                 DEBUG_PRINTF("Using %s implementation\n",simd_type[j]);

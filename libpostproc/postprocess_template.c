@@ -3361,6 +3361,58 @@ static inline void RENAME(deInterlace)(const uint8_t *srcBlock, int srcStride,
         RENAME(deInterlaceL5)(dstBlock, dstStride, tmp, tmp2);
     }
 }
+#if ARCH_X86 && TEMPLATE_PP_MMXEXT
+static inline void RENAME(prefetchnta)(const void *p)
+{
+    __asm__ volatile(   "prefetchnta (%0)\n\t"
+        : : "r" (p)
+    );
+}
+
+static inline void RENAME(prefetcht0)(const void *p)
+{
+    __asm__ volatile(   "prefetcht0 (%0)\n\t"
+        : : "r" (p)
+    );
+}
+
+static inline void RENAME(prefetcht1)(const void *p)
+{
+    __asm__ volatile(   "prefetcht1 (%0)\n\t"
+        : : "r" (p)
+    );
+}
+
+static inline void RENAME(prefetcht2)(const void *p)
+{
+    __asm__ volatile(   "prefetcht2 (%0)\n\t"
+        : : "r" (p)
+    );
+}
+#elif !ARCH_X86 && AV_GCC_VERSION_AT_LEAST(3,2)
+static inline void RENAME(prefetchnta)(const void *p)
+{
+    __builtin_prefetch(p,0,0);
+}
+static inline void RENAME(prefetcht0)(const void *p)
+{
+    __builtin_prefetch(p,0,1);
+}
+static inline void RENAME(prefetcht1)(const void *p)
+{
+    __builtin_prefetch(p,0,2);
+}
+static inline void RENAME(prefetcht2)(const void *p)
+{
+    __builtin_prefetch(p,0,3);
+}
+#else
+#define prefetchnta(p)
+#define prefetcht0(p)
+#define prefetcht1(p)
+#define prefetcht2(p)
+#endif
+
 /*
 static inline void RENAME(deBlock)(uint8_t *dstBlock, int stride,
                                    int step, PPContext *c, int mode)
@@ -3563,10 +3615,10 @@ static void RENAME(postProcess)(const uint8_t src[], int srcStride, uint8_t dst[
         // finish 1 block before the next otherwise we might have a problem
         // with the L1 Cache of the P4 ... or only a few blocks at a time or something
         for(x=0; x<width; x+=BLOCK_SIZE){
-            prefetchnta(srcBlock + (((x>>2)&6) + copyAhead)*srcStride + 32);
-            prefetchnta(srcBlock + (((x>>2)&6) + copyAhead+1)*srcStride + 32);
-            prefetcht0(dstBlock + (((x>>2)&6) + copyAhead)*dstStride + 32);
-            prefetcht0(dstBlock + (((x>>2)&6) + copyAhead+1)*dstStride + 32);
+            RENAME(prefetchnta)(srcBlock + (((x>>2)&6) + copyAhead)*srcStride + 32);
+            RENAME(prefetchnta)(srcBlock + (((x>>2)&6) + copyAhead+1)*srcStride + 32);
+            RENAME(prefetcht0)(dstBlock + (((x>>2)&6) + copyAhead)*dstStride + 32);
+            RENAME(prefetcht0)(dstBlock + (((x>>2)&6) + copyAhead+1)*dstStride + 32);
 #if TEMPLATE_PP_AVX2
             if(x + BLOCK_SIZE*4 <= width){
                 RENAME(deInterlace)(srcBlock, srcStride, dstBlock, dstStride,
@@ -3670,10 +3722,10 @@ static void RENAME(postProcess)(const uint8_t src[], int srcStride, uint8_t dst[
             RENAME(packQP)(&c);
 #endif
             for(;x<endx;x+=BLOCK_SIZE){
-                prefetchnta(srcBlock + (((x>>2)&6) + copyAhead)*srcStride + 32);
-                prefetchnta(srcBlock + (((x>>2)&6) + copyAhead+1)*srcStride + 32);
-                prefetcht0(dstBlock + (((x>>2)&6) + copyAhead)*dstStride + 32);
-                prefetcht0(dstBlock + (((x>>2)&6) + copyAhead+1)*dstStride + 32);
+                RENAME(prefetchnta)(srcBlock + (((x>>2)&6) + copyAhead)*srcStride + 32);
+                RENAME(prefetchnta)(srcBlock + (((x>>2)&6) + copyAhead+1)*srcStride + 32);
+                RENAME(prefetcht0)(dstBlock + (((x>>2)&6) + copyAhead)*dstStride + 32);
+                RENAME(prefetcht0)(dstBlock + (((x>>2)&6) + copyAhead+1)*dstStride + 32);
 #if TEMPLATE_PP_AVX2
             if(x + BLOCK_SIZE*4 <= endx){
                 RENAME(deInterlace)(srcBlock, srcStride, dstBlock, dstStride,

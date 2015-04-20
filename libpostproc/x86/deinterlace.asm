@@ -123,38 +123,38 @@ cglobal deInterlaceBlendLinear, 3, 5, 3 ;src, stride, tmp
     mova [r0], m0
 
     mova m0, [r3 + r1] ;L3
-    pavgb m2, m0
-    pavgb m2, m1
+    pavgb m2, m0 ;;L1+L3/2
+    pavgb m2, m1 ;;L1+L3+2L2/4
     mova [r3], m2
 
     mova m2, [r3 + r1 * 2]  ;L4
-    pavgb m1, m2
-    pavgb m1, m0
+    pavgb m1, m2 ;;L2+L4/2
+    pavgb m1, m0 ;;2L3+L2+L4/4
     mova [r3+r1], m1
 
     mova m1, [r0 + r1 * 4]  ;L5
-    pavgb m0, m1
-    pavgb m0, m2
+    pavgb m0, m1 ;;L3 + L5/2
+    pavgb m0, m2 ;;L3 + 2L4 + L5/4
     mova [r3 + r1 * 2], m0
 
     mova m0, [r4]  ;L6
-    pavgb m2, m0
-    pavgb m2, m1
+    pavgb m2, m0 ;;L4+L6/2
+    pavgb m2, m1 ;;L4 + 2L5 + L6/4
     mova [r0 + r1 * 4], m2
 
     mova m2, [r4 + r1]  ;L7
-    pavgb m1, m2
-    pavgb m1, m0
+    pavgb m1, m2 ;;L5 + L7/2
+    pavgb m1, m0 ;;L5 + 2L6 + L7/4
     mova [r4], m1
 
     mova m1, [r4 + r1 * 2] ;L8
-    pavgb m0, m1
-    pavgb m0, m2
+    pavgb m0, m1 ;;L6 + L8/2
+    pavgb m0, m2 ;;L6 + 2L7 + L8/4
     mova [r4 + r1], m0
 
     mova m0, [r0 + r1 * 8] ;L9
-    pavgb m2, m0
-    pavgb m2, m1
+    pavgb m2, m0 ;;L7+L9
+    pavgb m2, m1 ;;L7+2L8+L9
     mova [r4 + r1 * 2], m2
 
     mova [r2], m1 ;tmp
@@ -167,36 +167,36 @@ cglobal deInterlaceFF, 3, 5, 8 ;;src, stride, tmp
     lea r3, [r0 + r1]
     lea r4, [r3 + r1 * 4]
     pxor m7, m7
-    mova m6, [r2] ;;L0 (tmp)
+    mova m0, [r2] ;;L0 (tmp)
 
 %ifnmacro deint_ff
-%macro deint_ff 5
-    mova m0, %1 ;;Ln-2
-    mova m1, %2 ;;Ln-1
-    mova m2, %3 ;;Ln
-    mova m3, %4 ;;Ln+1
-    mova m4, %5 ;;Ln+2
-    mova m6, m2 ;;Ln-2 for next n
+%macro deint_ff 4
+;;  Ln-1 is in m0 by default
+    mova m1, %1 ;;Ln-1
+    mova m2, %2 ;;Ln
+    mova m3, %3 ;;Ln+1
+    mova m4, %4 ;;Ln+2
 
     pavgb m1, m3 ;;(Ln-1 + Ln+1)/2
     pavgb m0, m4 ;;(Ln-2 + Ln+2)/2
     mova m3, m0
-    mova m4, m1
-    mova m5, m2
-
-;; Do calculations on 16 bit values
     punpcklbw m0, m7
     punpckhbw m3, m7
+
+    mova m4, m1
     punpcklbw m1, m7
     punpckhbw m4, m7
-    punpcklbw m2, m7
-    punpckhbw m5, m7
 
     psllw m1, 2
     psllw m4, 2 ;;(Ln-1 + Ln+1)*2
 
     psubw m1, m0
     psubw m4, m3 ;;(Ln-1 + Ln+1)*2 - (Ln-2 + Ln+2)/2
+
+    mova m5, m2
+    mova m0, m2 ;;Ln-2 for next loop
+    punpcklbw m2, m7
+    punpckhbw m5, m7
 
     paddw m1, m2
     paddw m4, m5 ;;(Ln-1 + Ln+1)*2 + Ln - (Ln-2 + Ln+2)/2
@@ -205,13 +205,14 @@ cglobal deInterlaceFF, 3, 5, 8 ;;src, stride, tmp
     psraw m4, 2 ;;(4(Ln-1 + Ln+1) + 2Ln - (Ln-2 + Ln+2))/8
 
     packuswb m1, m4
-    mova %3, m1
+    mova %2, m1
 %endmacro
 %endif
-    deint_ff m6, [r0], [r3], [r3 + r1], [r3 + r1 * 2]
-    deint_ff m6, [r3 + r1], [r3 + r1 *2], [r0 + r1 * 4], [r4]
-    deint_ff m6, [r0 + r1 * 4], [r4], [r4 + r1], [r4 + r1 * 2]
-    deint_ff m6, [r4 + r1], [r4 + r1 * 2], [r0 + r1 * 8], [r4 + r1 * 4]
+    deint_ff [r0], [r3], [r3 + r1], [r3 + r1 * 2]
+    deint_ff [r3 + r1], [r3 + r1 *2], [r0 + r1 * 4], [r4]
+    deint_ff [r0 + r1 * 4], [r4], [r4 + r1], [r4 + r1 * 2]
+    deint_ff [r4 + r1], [r4 + r1 * 2], [r0 + r1 * 8], [r4 + r1 * 4]
+    mova [r2], m0
     RET
 %endmacro
 
@@ -254,8 +255,8 @@ cglobal deInterlaceL5, 4, 6, 8 ;;src, stride, tmp1, tmp2
 
     paddw m3, m3
     paddw m6, m6
-    paddw m3, m2
-    paddw m6, m5 ;;Ln-1 + 3Ln + Ln+1
+    paddw m2, m3
+    paddw m5, m6 ;;Ln-1 + 3Ln + Ln+1
 
     mova m6, m4
     punpcklbw m4, m7

@@ -107,8 +107,8 @@ typedef struct PPContext{
     PPMode ppMode;
 } PPContext;
 static const int num_test_blocks = 96;
-static const int num_rand_blocks = 256;
-static const int num_total_blocks = 256 + 96;
+static const int num_rand_blocks = 1024;
+static const int num_total_blocks = 1024 + 96;
 static const int rand_seed = 0x12345678;
 #define NUM_FILTER_TYPES 5
 static const char *simd_type[5] = {"C","mmx2","MMX2","sse2","avx2"};
