@@ -44,6 +44,13 @@ extern void ff_deInterlaceL5_mmx2(uint8_t *, int,
 extern void ff_deInterlaceBlendLinear_mmx2(uint8_t *, int, uint8_t *);
 extern void ff_deInterlaceMedian_mmx2(uint8_t *, int);
 extern void ff_blockCopy_mmx2(uint8_t*,int,const uint8_t*,int,int,int64_t*);
+#define  deInterlaceInterpolateLinear_mmx2 ff_deInterlaceInterpolateLinear_mmx2
+#define  deInterlaceInterpolateCubic_mmx2 ff_deInterlaceInterpolateCubic_mmx2
+#define  deInterlaceFF_mmx2 ff_deInterlaceFF_mmx2
+#define  deInterlaceL5_mmx2 ff_deInterlaceL5_mmx2
+#define  deInterlaceBlendLinear_mmx2 ff_deInterlaceBlendLinear_mmx2
+#define  deInterlaceMedian_mmx2 ff_deInterlaceMedian_mmx2
+#define  blockCopy_mmx2 ff_blockCopy_mmx2
 #define TEMPLATE_PP_C 1
 #include "deinterlace.c"
 #define TEMPLATE_PP_MMX 1
@@ -63,6 +70,13 @@ static const deinterlace_filter C_filters[6] = {
     {deInterlaceL5_C,1,1},
     {deInterlaceBlendLinear_C,1,0},
     {deInterlaceMedian_C,0,0}};
+static const deinterlace_filter mmx2_filters[6] = {
+    {deInterlaceInterpolateLinear_mmx2,0,0},
+    {deInterlaceInterpolateCubic_mmx2,0,0},
+    {deInterlaceFF_mmx2,1,0},
+    {deInterlaceL5_mmx2,1,1},
+    {deInterlaceBlendLinear_mmx2,1,0},
+    {deInterlaceMedian_mmx2,0,0}};
 static const deinterlace_filter MMX2_filters[6] = {
     {deInterlaceInterpolateLinear_MMX2,0,0},
     {deInterlaceInterpolateCubic_MMX2,0,0},
@@ -84,7 +98,7 @@ static const deinterlace_filter avx2_filters[6] = {
     {deInterlaceL5_avx2,1,1},
     {deInterlaceBlendLinear_avx2,1,0},
     {deInterlaceMedian_avx2,0,0}};
-static deinterlace_filter *filters[4]={C_filters, MMX2_filters,
+static deinterlace_filter *filters[5]={C_filters, mmx2_filters,MMX2_filters,
                                        sse2_filters, avx2_filters};
 static uint8_t *generate_test_blocks(){
     //generate various blocks to use in comparing simd and non-simd code
@@ -152,7 +166,7 @@ void write_avg_results(uint64_t *block_sums, uint8_t *block_averages,
     int i,j;
     int stride = num_total_blocks;
     for(i=0;i<num_blocks;i+=4){
-        for(j=0;j<4;j++){
+        for(j=0;j<5;j++){
             fprintf(outfile,
                     "%-8s%5lu %3hhu | %5lu %3hhu | %5lu %3hhu | %5lu %3hhu\n",
                     simd_type[j],
@@ -248,34 +262,35 @@ int main(int argc, char **argv){
 //    DEBUG_PRINTF("generated test blocks\n");
     int outfile_size = strlen(outdir) + 64;//way more than enough space
     int i,j;
-    char *data_outfiles[24];
+    char *data_outfiles[30];
     char *avg_outfiles[6];
     for(i=0;i<6;i++){
         avg_outfiles[i] = malloc(outfile_size);
         snprintf(avg_outfiles[i], outfile_size,
                  "%s%s_avgs", outdir, deint_filter_names[i]);
-        for(j=0;j<4;j++){
+        for(j=0;j<5;j++){
             data_outfiles[i + j*6] = malloc(outfile_size);
             snprintf(data_outfiles[i + j*6], outfile_size,
                      "%s%s_%s", outdir, simd_type[j], deint_filter_names[i]);
         }
     }
 
-    uint64_t *block_sums = malloc(sizeof(uint64_t)*num_total_blocks*4);
+    uint64_t *block_sums = malloc(sizeof(uint64_t)*num_total_blocks*5);
 //    DEBUG_PRINTF("allocated block sums\n");
-    uint8_t *block_avgs = malloc(sizeof(uint8_t)*num_total_blocks*4);
+    uint8_t *block_avgs = malloc(sizeof(uint8_t)*num_total_blocks*5);
 //    DEBUG_PRINTF("allocated block avgs\n");
     uint8_t *blocks = aligned_alloc(32, num_total_blocks*64);
     uint8_t *blocks_src = generate_test_blocks();
     __builtin_cpu_init();
-    int features[4] = {1, __builtin_cpu_supports("sse"),
+    int features[5] = {1, __builtin_cpu_supports("sse"),
+                       __builtin_cpu_supports("sse"),
                        __builtin_cpu_supports("sse2"),
                        __builtin_cpu_supports("avx2")};
     for(i=0;i<6;i++){
         DEBUG_PRINTF("Running %s filters\n", deint_filter_names[i]);
         memset(block_sums, '\0', sizeof(uint64_t)*num_total_blocks*4);
         memset(block_avgs, '\0', sizeof(uint8_t)*num_total_blocks*4);
-        for(j=0;j<4;j++){
+        for(j=0;j<5;j++){
             if(features[j]){
                 DEBUG_PRINTF("Using %s implementation\n",simd_type[j]);
                 memcpy(blocks, blocks_src, num_total_blocks*64);

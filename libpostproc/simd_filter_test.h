@@ -110,8 +110,9 @@ static const int num_test_blocks = 96;
 static const int num_rand_blocks = 256;
 static const int num_total_blocks = 256 + 96;
 static const int rand_seed = 0x12345678;
-static const char *simd_type[4] = {"C","MMX2","sse2","avx2"};
-static const int simd_widths[4] = {1,2,2,4};
+#define NUM_FILTER_TYPES 5
+static const char *simd_type[5] = {"C","mmx2","MMX2","sse2","avx2"};
+static const int simd_widths[5] = {1,1,1,2,4};
 static const char *deint_filter_names[6] = {"Interpolate_Linear",
                                             "Interpolate_Cubic", "FF", "L5",
                                             "Blend_Linear","Median"};
