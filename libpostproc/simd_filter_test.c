@@ -268,6 +268,7 @@ PPContext *allocate_PPContext(){
 //default for chroma, luma is too complicated for right now
     c.packedYScale= 0x0100010001000100LL;
     c.packedYOffset= 0;*/
+
 static inline uint8_t unsigned_saturate(uint64_t x){
     return x >= 0xff ? 0xff : x;
 }
