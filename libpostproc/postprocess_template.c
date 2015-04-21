@@ -3249,7 +3249,6 @@ static inline void RENAME(prefetchnta)(const void *p)
         : : "r" (p)
     );
 }
-
 static inline void RENAME(prefetcht0)(const void *p)
 {
     __asm__ volatile(   "prefetcht0 (%0)\n\t"
@@ -3303,6 +3302,53 @@ static inline void RENAME(prefetcht1)(const void *p)
 static inline void RENAME(prefetcht2)(const void *p)
 {
     return;
+/*
+  This is temporary. Ultimately the inline asm should be removed completely
+  and moved to another file (though this has some performance overhead), but for
+  now this code is necessary.
+  Get around the issues with inline avx by using an explicit register
+  and simplify code by abstracting simd detail like in yasm code
+*/
+#if TEMPLATE_PP_MMX
+static inline void RENAME(packQP)(PPContext c)
+{
+#if TEMPLATE_PP_AVX2
+    __asm__ volatile(
+        "vmovdqa (%1), %%ymm0\n\t"
+        "vpermq $0, %%ymm0, %%ymm0 \n\t"
+        "vpunpcklbw %%ymm0, %%ymm0, %%ymm0  \n\t" // 0, 0, 0, 0, 0, 0, OP, QP
+        "vpunpcklwd %%ymm0, %%ymm0, %%ymm0  \n\t" // 0, 0, 0, 0, 0, 0, QP, QP
+        "vpunpckldq %%ymm0, %%ymm0, %%ymm0  \n\t" //QP,...,QP
+        "vpunpcklqdq %%ymm0, %%ymm0, %%ymm0  \n\t" //copy to upper quadword(s)
+        "vmovdqa %%ymm0, %0"
+        : "=m" (c.pQPb_block)
+        : "r" (c.QP_block)
+        : "%ymm0"
+    );
+#else
+#if TEMPLATE_PP_SSE2
+#define M0 "%xmm0"
+#define MOVA "movdqa"
+#else
+#define M0 "%mm0"
+#define MOVA "movq"
+#endif
+    __asm__ volatile(
+        MOVA" (%1), %"M0"\n\t"
+        "punpcklbw %"M0", %"M0"  \n\t" // 0, 0, 0, 0, 0, 0, OP, QP
+        "punpcklwd %"M0", %"M0"  \n\t" // 0, 0, 0, 0, 0, 0, QP, QP
+        "punpckldq %"M0", %"M0"  \n\t" //QP,...,QP
+#if TEMPLATE_PP_SSE2
+        "punpcklqdq %"M0", %"M0"  \n\t" //copy to upper quadword(s)
+#endif
+        MOVA" %"M0", %0"
+        : "=m" (c.pQPb_block)
+        : "r" (c.QP_block)
+        : M0
+    );
+#undef M0
+#undef MOVA
+#endif
 }
 #endif
 /**
@@ -3516,6 +3562,7 @@ static void RENAME(postProcess)(const uint8_t src[], int srcStride, uint8_t dst[
             for(qp_index=0; qp_index < (endx-startx)/BLOCK_SIZE; qp_index++){
                 QP = QPptr[(x+qp_index*BLOCK_SIZE)>>qpHShift];
                 nonBQP = nonBQPptr[(x+qp_index*BLOCK_SIZE)>>qpHShift];
+
             if(!isColor){
                 QP= (QP* QPCorrecture + 256*128)>>16;
                 nonBQP= (nonBQP* QPCorrecture + 256*128)>>16;
@@ -3523,15 +3570,7 @@ static void RENAME(postProcess)(const uint8_t src[], int srcStride, uint8_t dst[
             c.QP_block[qp_index] = QP;
             c.nonBQP_block[qp_index] = nonBQP;
 #if TEMPLATE_PP_MMX
-            __asm__ volatile(
-                "movd %1, %%mm7         \n\t"
-                "packuswb %%mm7, %%mm7  \n\t" // 0, 0, 0, QP, 0, 0, 0, QP
-                "packuswb %%mm7, %%mm7  \n\t" // 0,QP, 0, QP, 0,QP, 0, QP
-                "packuswb %%mm7, %%mm7  \n\t" // QP,..., QP
-                "movq %%mm7, %0         \n\t"
-                : "=m" (c.pQPb_block[qp_index])
-                : "r" (QP)
-            );
+            RENAME(packQP)(&c);
 #endif
             }
           for(; x < endx; x+=BLOCK_SIZE){
