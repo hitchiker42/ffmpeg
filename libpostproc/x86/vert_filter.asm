@@ -21,7 +21,16 @@
 ;* Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 %include "PPutil.asm"
 
-define_qword_vector_constant b80, 0x8080808080808080
+define_vector_constant b80, 0x8080808080808080
+;;the define_vector_constant macro doesn't really work here
+SECTION_ROTATA 32
+avx_vert_classify_mask: 
+    dd 0x00
+    dd 0x02
+    dd 0x04
+    dd 0x06
+SECTION_TEXT
+    
 
 ;; The return value is a 32 bit integer with each byte corrsponding to a block
 %macro gen_vert_classify 0
@@ -120,31 +129,38 @@ cglobal vert_classify, 3, 6, 7;,src, stride, context
 ;; The return value is as follows (for each quadword):
 ;;  m0 > m2 ? m4 ? 0 : 1 : 2
 ;; set m5 to packed doublewords equal to 1, and m6 to doublewords equal to 2
-    pcmovled m3, m6, m2, m0, m0 ;set each quadword in m3 to 2 if m0 <= m2
+    pcmovleq m3, m6, m2, m0, m0 ;set each quadword in m3 to 2 if m0 <= m2
     pandn m0, m1 ;;flip bits of m0 (m0 is the mask from the previous comparison)
     pxor m2, m2
     pcmoveqd m2, m5, m2, m4, m4 ;;set quadwords of m2 to 1 if m4 != 0
     pand m2, m0 ;;set the quadwords that have been set to 2 in m3 to 0 in m2
     paddd m3, m2
 ;; now each quadword in m3 should be set to the proper return value
-;; now pack the return value into eax (one byte per block)
+;; now pack the return value into eax (one word per block)
+;; As far as I can tell this is the right return register regardless
+;; of operating system or architecture (at least the standard one)
+;; this means the vax2 version returns a quadword, while the other
+;; versions return a doubleword, this will need to be delt with in c
+;; however words are a lot eaiser to work with in asm than bytes
 %if cpuflag(avx2)
-;; There are too many avx intsructions I don't know what to use
+    mova xmm0, [avx_vert_classify_mask]
+    vpermd m1, m0, m3 ;;move everything to low 128 bits
+    packssdw m1, m1 ;;doublewords to words
+    movq rax, m1
 %elif cpuflag(sse2)
-    pshufd m3, m3 00101011b
-;; not super efficent, but it should work
-    pextrw eax, m3, 0x00
-    pextrw edi, m3, 0x02
-    sll edi, 8
-    or eax, edi
-%if
+    pshufd m3, m3 11101000b ;;put both results in low quadword
+    packssdw m3, m3
+    movd eax, m3
 %else ;cpuflag(mmx), 32 bit by default
     movd eax, m3
 %endif
     RET
 %endmacro
 
-
+;;TODO: rewrite these next two functions to either keep results
+;;in registers or store them on the stack, and only write them
+;;at the end, only writing specific blocks depending on the results
+;;of vert classifiy (the result of which will need to be passed to these)
 %macro gen_do_vert_low_pass 0
 cglobal doVertLowPass 3, 5, 8 ;;src, stride, ppcontext
     lea r3, [r1 + r1 * 4]
@@ -278,14 +294,9 @@ cglobal doVertDefFilter 3,6,8 ;src,stride,ppcontext
     lea r0, [r0 + 4*r1]
     lea r3, [r0 + r1]
     lea r4, [r3 + 4*r1]
-<<<<<<< HEAD
-    pcmpeQb m7, m7 ;;all 1s
-    mova m0, [r0 + 4*r1] ;L4
-    pxor m6, m6
-=======
     pcmpeqb m7, m7 ;;all 1s
     mova m0, [r0 + 4*r1] ;L4
->>>>>>> e8052ef... Work in progress
+    pxor m6, m6
     mova m1, [r3 + 2*r1] ;L3
     mova m2, [r3 + 4*r1] ;L5
     mova m3, [r3 + r1]   ;L2
@@ -294,16 +305,11 @@ cglobal doVertDefFilter 3,6,8 ;src,stride,ppcontext
     pxor m2, m7 ;~L5 = -L5 -1
     mova m5, m2
 
-<<<<<<< HEAD
     pavgb m0, m1 ;;(L4-L3+256)/2 === 128-Q
-=======
-    pavgb m0, m1 ;;(L4-L3+256)/2
->>>>>>> e8052ef... Work in progress
     pavgb m2, m3 ;;(L2-L5+256)/2
     pavgb m4, m0 ;;~(L4-L3)/4 + 128
     pavgb m4, m2 ;;~(L2-L5)/4 + (L4-L3)/8 + 128
     pavgb m4, m0 ;;~(L2-L5)/8 + 5(L4-L3)/16 + 128 === M/16
-<<<<<<< HEAD
 
     mova m2, [r3] ;;L1
     pxor m2, m7  ;;~L1 = -L1-1
@@ -378,11 +384,3 @@ cglobal doVertDefFilter 3,6,8 ;src,stride,ppcontext
 ;; In postprocess_template there's a seperate implementation
 ;; For MMX without pavgb
 %endmacro
-=======
-    
-    mova m2, [r3] ;;L1
-    pxor m2, m7  ;;~L1
-    pavgb m2, m3 ;;(L2-L1+256)/2
-    pavgb m1, [r0] ;;(L0-L3+256)/2
-    
->>>>>>> e8052ef... Work in progress
