@@ -112,6 +112,8 @@ typedef struct PPMode{
 /**
  * postprocess context.
  */
+//TODO: rearrange the fields of this to minimize padding bytes, since I've added 
+//stricter alignement to some fields for the sake of avx/sse there's some wasted space
 typedef struct PPContext{
     /**
      * info on struct for av_log
@@ -156,11 +158,10 @@ typedef struct PPContext{
     int QP;
     int nonBQP;
 
-    QP_STORE_T QP_block[4];
-    QP_STORE_T nonBQP_block[4];
+    DECLARE_ALIGNED(32, int, QP_block)[4];
+    DECLARE_ALIGNED(32, int, nonBQP_block)[4];
 
     int frameNum;
-
     int cpuCaps;
 
     int qpStride; ///<size of qp buffers (needed to realloc them if needed)
