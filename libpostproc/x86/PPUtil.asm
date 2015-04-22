@@ -100,7 +100,8 @@ movd %1, %3
 ;; constant will work for all simd instruction sets
 %macro define_vector_constant 5
 %xdefine %%section __SECT__
-SECTION_RODATA 32
+ SECTION .rodata
+alignb 32
 %1:
     dq %2
     dq %3
