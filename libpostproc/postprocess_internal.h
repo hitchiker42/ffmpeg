@@ -156,11 +156,10 @@ typedef struct PPContext{
     int QP;
     int nonBQP;
 
-    QP_STORE_T QP_block[4];
-    QP_STORE_T nonBQP_block[4];
+    DECLARE_ALIGNED(32, int, QP_block)[4];
+    DECLARE_ALIGNED(32, int, nonBQP_block)[4];
 
     int frameNum;
-
     int cpuCaps;
 
     int qpStride; ///<size of qp buffers (needed to realloc them if needed)
