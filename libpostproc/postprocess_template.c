@@ -129,6 +129,7 @@ extern void RENAME(ff_deInterlaceFF)(uint8_t *, int, uint8_t *);
 extern void RENAME(ff_deInterlaceL5)(uint8_t *, int, uint8_t *, uint8_t*);
 extern void RENAME(ff_deInterlaceBlendLinear)(uint8_t *, int, uint8_t *);
 extern void RENAME(ff_deInterlaceMedian)(uint8_t *, int);
+extern void RENAME(ff_do_a_deblock)(uint8_t *, int, int, PPContext*, int);
 extern void RENAME(ff_blockCopy)(uint8_t*,int,const uint8_t*,
                                  int,int,int64_t*);
 extern void RENAME(ff_duplicate)(uint8_t*, int);
@@ -160,6 +161,11 @@ static inline void RENAME(deInterlaceBlendLinear)(uint8_t src[], int stride,
 static inline void RENAME(deInterlaceMedian)(uint8_t src[], int stride)
 {
     RENAME(ff_deInterlaceMedian)(src, stride);
+}
+static inline void RENAME(do_a_deblock)(uint8_t *src, int stride, int step,
+                                        PPContext *c, int mode)
+{
+    RENAME(ff_do_a_deblock)(src, stride, step, c, mode);
 }
 #else
 //FIXME? |255-0| = 1 (should not be a problem ...)
@@ -3365,6 +3371,49 @@ static inline void RENAME(prefetcht2)(const void *p)
     return;
 }
 #endif
+
+//pass PPContext by value since this should get inlined into postprocess
+//which has a copy of PPContext on the stack for fast access
+static inline void RENAME(deblock)(uint8_t *dstBlock, int stride,
+                                   int step, PPContext c, int mode,
+                                   int num_blocks)
+{
+    int block_index = 0;
+    while(block_index < num_blocks){
+        c.QP = c.QP_block[block_index];
+        c.nonBQP = c.nonBQP_block[block_index];
+        c.pQPb = c.pQPb_block[block_index];
+        c.pQPb2 = c.pQPb2_block[block_index];
+        if(mode & V_A_DEBLOCK){
+            //usually processes 4 blocks, unless there are less than 4 left
+#if TEMPLATE_PP_AVX2
+            if(num_blocks == 4){
+                RENAME(do_a_deblock)(dstBlock, stride, step, &c, mode);
+                block_index += 4;
+                continue;
+            }
+#endif
+#if TEMPLATE_PP_SSE2
+            if(block_index-num_blocks >= 2){
+                do_a_deblock_sse2(dstBlock + block_index*8, stride, 0, &c, mode);
+                block_index += 2;
+                continue;
+            }
+#endif
+            RENAME_SCALAR(do_a_deblock)(dstBlock + block_index*8, stride, 0, &c, mode);
+        } else if(mode & V_X1_FILTER){
+                RENAME_SCALAR(vertX1Filter)(dstBlock + block_index*8, stride, &c);
+        } else if(mode & V_DEBLOCK){
+            const int t = RENAME_SCALAR(vertClassify)(dstBlock + block_index*8, stride, &c);
+            if(t == 1){
+                RENAME_SCALAR(doVertLowPass)(dstBlock + block_index*8, stride, &c);
+            } else if(t == 2){
+                RENAME_SCALAR(doVertDefFilter)(dstBlock + block_index*8, stride, &c);
+            }
+        }
+        block_index++;
+    }
+}
 /*
   This calls a rather trivial assembly function, there is some performance
   overhead to the function call vs using inline asm, but (at least I think)
@@ -3650,10 +3699,8 @@ static void RENAME(postProcess)(const uint8_t src[], int srcStride, uint8_t dst[
             int endx = FFMIN(width, x+32);
             int num_blocks = (endx-startx)/8;
             int block_index;
-            uint8_t *dstBlockStart = dstBlock;
-            const uint8_t *srcBlockStart = srcBlock;
             int qp_index = 0;
-            for(qp_index=0; qp_index < (endx-startx)/BLOCK_SIZE; qp_index++){
+            for(qp_index=0; qp_index < num_blocks; qp_index++){
                 QP = QPptr[(x+qp_index*BLOCK_SIZE)>>qpHShift];
                 nonBQP = nonBQPptr[(x+qp_index*BLOCK_SIZE)>>qpHShift];
             if(!isColor){
@@ -3678,40 +3725,9 @@ static void RENAME(postProcess)(const uint8_t src[], int srcStride, uint8_t dst[
             }
             RENAME(deInterlace)(dstBlock, dstStride, c.deintTemp +x,
                                 c.deintTemp + width + x, mode, num_blocks);
-
-            
-          for(x = startx, qp_index = 0; x < endx; x+=BLOCK_SIZE, qp_index++){
-            const int stride= dstStride;
-            //temporary while changing QP stuff to make things continue to work
-            //eventually QP,nonBQP,etc will be arrays and this will be unnecessary
-            c.QP = c.QP_block[qp_index];
-            c.nonBQP = c.nonBQP_block[qp_index];
-            c.pQPb = c.pQPb_block[qp_index];
-            c.pQPb2 = c.pQPb2_block[qp_index];
-
-            /* only deblock if we have 2 blocks */
-            if(y + 8 < height){
-                if(mode & V_X1_FILTER)
-                    RENAME_SCALAR(vertX1Filter)(dstBlock, stride, &c);
-                else if(mode & V_DEBLOCK){
-                    const int t= RENAME_SCALAR(vertClassify)(dstBlock, stride, &c);
-
-                    if(t==1)
-                        RENAME_SCALAR(doVertLowPass)(dstBlock, stride, &c);
-                    else if(t==2)
-                        RENAME_SCALAR(doVertDefFilter)(dstBlock, stride, &c);
-                }else if(mode & V_A_DEBLOCK){
-                    RENAME_SCALAR(do_a_deblock)(dstBlock, stride, 1, &c, mode);
-                }
+            if(y+8<height){
+                RENAME(deblock)(dstBlock, dstStride, 1, c, mode, num_blocks);
             }
-
-            dstBlock+=8;
-            srcBlock+=8;
-          }
-
-          dstBlock = dstBlockStart;
-          srcBlock = srcBlockStart;
-
           for(x = startx, qp_index=0; x < endx; x+=BLOCK_SIZE, qp_index++){
             const int stride= dstStride;
             av_unused uint8_t *tmpXchg;
