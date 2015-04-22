@@ -180,5 +180,12 @@ static inline void linecpy(void *dest, const void *src, int lines, int stride) {
         memcpy((uint8_t*)dest+(lines-1)*stride, (const uint8_t*)src+(lines-1)*stride, -lines*stride);
     }
 }
-
+extern void ff_deInterlaceInterpolateLinear_mmx2(uint8_t *, int);
+extern void ff_deInterlaceInterpolateCubic_mmx2(uint8_t *, int);
+extern void ff_deInterlaceFF_mmx2(uint8_t *, int, uint8_t *);
+extern void ff_deInterlaceL5_mmx2(uint8_t *, int,
+                                  uint8_t *,uint8_t*);
+extern void ff_deInterlaceBlendLinear_mmx2(uint8_t *, int, uint8_t *);
+extern void ff_deInterlaceMedian_mmx2(uint8_t *, int);
+extern void ff_blockCopy_mmx2(uint8_t*,int,const uint8_t*,int,int,int64_t*);
 #endif /* POSTPROC_POSTPROCESS_INTERNAL_H */

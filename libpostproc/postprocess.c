@@ -542,8 +542,13 @@ static av_always_inline void do_a_deblock_C(uint8_t *src, int step,
 #        include "postprocess_template.c"
 #        define TEMPLATE_PP_SSE2 1
 #        include "postprocess_template.c"
+#        define TEMPLATE_PP_AVX2 1
+#        include "postprocess_template.c"
 #    else
-#        if HAVE_SSE2_INLINE
+#        if HAVE_AVX2_INLINE
+#            define TEMPLATE_PP_AVX2 1
+#            include "postprocess_template.c"
+#        elif HAVE_SSE2_INLINE
 #            define TEMPLATE_PP_SSE2 1
 #            include "postprocess_template.c"
 #        elif HAVE_MMXEXT_INLINE
@@ -574,7 +579,8 @@ static inline void postProcess(const uint8_t src[], int srcStride, uint8_t dst[]
 #if CONFIG_RUNTIME_CPUDETECT
 #if ARCH_X86 && HAVE_INLINE_ASM
         // ordered per speed fastest first
-        if      (c->cpuCaps & AV_CPU_FLAG_SSE2)     pp = postProcess_SSE2;
+        if      (c->cpuCaps & AV_CPU_FLAG_AVX2)     pp = postProcess_avx2;
+        else if (c->cpuCaps & AV_CPU_FLAG_SSE2)     pp = postProcess_sse2;
         else if (c->cpuCaps & AV_CPU_FLAG_MMXEXT)   pp = postProcess_MMX2;
         else if (c->cpuCaps & AV_CPU_FLAG_3DNOW)    pp = postProcess_3DNow;
         else if (c->cpuCaps & AV_CPU_FLAG_MMX)      pp = postProcess_MMX;
@@ -582,8 +588,10 @@ static inline void postProcess(const uint8_t src[], int srcStride, uint8_t dst[]
         if      (c->cpuCaps & AV_CPU_FLAG_ALTIVEC)  pp = postProcess_altivec;
 #endif
 #else /* CONFIG_RUNTIME_CPUDETECT */
-#if     HAVE_SSE2_INLINE
-        pp = postProcess_SSE2;
+#if     HAVE_AVX2_INLINE
+        pp = postProcess_avx2;
+#elif     HAVE_SSE2_INLINE
+        pp = postProcess_sse2;
 #elif   HAVE_MMXEXT_INLINE
         pp = postProcess_MMX2;
 #elif HAVE_AMD3DNOW_INLINE
