@@ -122,6 +122,7 @@ extern void RENAME(ff_deInterlaceFF)(uint8_t *, int, uint8_t *);
 extern void RENAME(ff_deInterlaceL5)(uint8_t *, int, uint8_t *, uint8_t*);
 extern void RENAME(ff_deInterlaceBlendLinear)(uint8_t *, int, uint8_t *);
 extern void RENAME(ff_deInterlaceMedian)(uint8_t *, int);
+extern void RENAME(ff_do_a_deblock)(uint8_t *, int, int, PPContext*, int);
 extern void RENAME(ff_blockCopy)(uint8_t*,int,const uint8_t*,
                                  int,int,int64_t*);
 extern void RENAME(ff_duplicate)(uint8_t*, int);
@@ -170,6 +171,38 @@ static inline void RENAME(duplicate)(uint8_t *src, int stride)
         duplicate_MMX2(src+i, stride);
     }
 }
+static inline void RENAME(do_a_deblock)(uint8_t *src, int stride, int step,
+                                        PPContext *c, int mode)
+{
+    RENAME(ff_do_a_deblock)(src, stride, step, c, mode);
+}
+//these are to avoid a bunch of duplicate code
+static inline int RENAME(vertClassify)(const uint8_t src[], int stride, PPContext *c)
+{
+    return vertClassify_MMX2(src,stride,c);
+}
+static inline void RENAME(doVertLowPass)(uint8_t *src, int stride, PPContext *c)
+{
+    doVertLowPass_MMX2(src,stride,c);
+}
+static inline void RENAME(doVertDefFilter)(uint8_t src[], int stride, PPContext *c)
+{
+    doVertDefFilter_MMX2(src, stride, c);
+}
+static inline void RENAME(vertX1Filter)(uint8_t *src, int stride, PPContext *co)
+{
+    vertX1Filter_MMX2(src,stride,co);
+}
+static inline void RENAME(dering)(uint8_t src[], int stride, PPContext *c)
+{
+    dering_MMX2(src, stride, c);
+}
+static inline void RENAME(tempNoiseReducer)(uint8_t *src, int stride,
+                                    uint8_t *tempBlurred, uint32_t *tempBlurredPast, const int *maxNoise)
+{
+    tempNoiseReducer_MMX2(src, stride, tempBlurred, tempBlurredPast, maxNoise);
+}
+
 #else
 //FIXME? |255-0| = 1 (should not be a problem ...)
 #if TEMPLATE_PP_MMX
@@ -3374,6 +3407,57 @@ static inline void RENAME(prefetcht2)(const void *p)
     return;
 }
 #endif
+
+//pass PPContext by value since this should get inlined into postprocess
+//which has a copy of PPContext on the stack for fast access
+static inline void RENAME(deblock)(uint8_t *dstBlock, int stride,
+                                   int step, PPContext c, int mode,
+                                   int num_blocks)
+{
+    //usually processes 4 blocks, unless there are less than 4 left
+    int qp_index = 0;
+#if TEMPLATE_PP_AVX2
+    if(num_blocks == 4 && (mode & V_A_DEBLOCK)){
+        RENAME(do_a_deblock)(dstBlock, stride, step, &c, mode);
+        qp_index = 4;
+    }
+#elif TEMPLATE_PP_SSE2
+    if(num_blocks >= 2 && (mode & V_A_DEBLOCK)){
+        if(num_blocks == 4){
+            RENAME(do_a_deblock)(dstBlock, stride, 0, &c, mode);
+            RENAME(do_a_deblock)(dstBlock + 16, stride, 8, &c, mode);
+            qp_index = 4;//skip for loop
+        } else {
+            RENAME(do_a_deblock)(dstBlock, stride, 0, &c, mode);
+            dstBlock +=8;
+            qp_index = 2;
+        }
+    }
+#endif
+    for(;qp_index<num_blocks;qp_index++){
+        c.QP = c.QP_block[qp_index];
+        c.nonBQP = c.nonBQP_block[qp_index];
+        c.pQPb = c.pQPb_block[qp_index];
+        c.pQPb2 = c.pQPb2_block[qp_index];
+        if(mode & V_X1_FILTER){
+            RENAME(vertX1Filter)(dstBlock, stride, &c);
+        } else if(mode & V_DEBLOCK){
+            const int t = RENAME(vertClassify)(dstBlock, stride, &c);
+            if(t == 1){
+                RENAME(doVertLowPass)(dstBlock, stride, &c);
+            } else if(t == 2){
+                RENAME(doVertDefFilter)(dstBlock, stride, &c);
+            }
+        } else if(mode & V_A_DEBLOCK){
+#if TEMPLATE_PP_SSE2
+            do_a_deblock_MMX2(dstBlock, stride, step, &c, mode);
+#else
+            RENAME(do_a_deblock)(dstBlock, stride, step, &c, mode);
+#endif
+        }
+        dstBlock += 8;
+    }
+}
 /*
   This calls a rather trivial assembly function, there is some performance
   overhead to the function call vs using inline asm, but (at least I think)
@@ -3655,6 +3739,7 @@ static void RENAME(postProcess)(const uint8_t src[], int srcStride, uint8_t dst[
         for(x=0; x<width; ){
             int startx = x;
             int endx = FFMIN(width, x+32);
+            int num_blocks = (endx-startx)/8;
             uint8_t *dstBlockStart = dstBlock;
             const uint8_t *srcBlockStart = srcBlock;
             int qp_index = 0;
@@ -3742,43 +3827,15 @@ static void RENAME(postProcess)(const uint8_t src[], int srcStride, uint8_t dst[
 
           dstBlock = dstBlockStart;
           srcBlock = srcBlockStart;
-//change back to mmx, if using sse2 or avx2
+
+          if(y+8<height){
+              RENAME(deblock)(dstBlock, dstStride, 1, c, mode, num_blocks);
+          }
+//change back to mmx, if using sse2 or avx2, for horozontal code
 #if TEMPLATE_PP_SSE2
 #undef RENAME
 #define RENAME(a) a ## _MMX2
 #endif
-
-          for(x = startx, qp_index = 0; x < endx; x+=BLOCK_SIZE, qp_index++){
-            const int stride= dstStride;
-            //temporary while changing QP stuff to make things continue to work
-            //eventually QP,nonBQP,etc will be arrays and this will be unnecessary
-            c.QP = c.QP_block[qp_index];
-            c.nonBQP = c.nonBQP_block[qp_index];
-            c.pQPb = c.pQPb_block[qp_index];
-            c.pQPb2 = c.pQPb2_block[qp_index];
-
-            /* only deblock if we have 2 blocks */
-            if(y + 8 < height){
-                if(mode & V_X1_FILTER)
-                    RENAME(vertX1Filter)(dstBlock, stride, &c);
-                else if(mode & V_DEBLOCK){
-                    const int t= RENAME(vertClassify)(dstBlock, stride, &c);
-
-                    if(t==1)
-                        RENAME(doVertLowPass)(dstBlock, stride, &c);
-                    else if(t==2)
-                        RENAME(doVertDefFilter)(dstBlock, stride, &c);
-                }else if(mode & V_A_DEBLOCK){
-                    RENAME(do_a_deblock)(dstBlock, stride, 1, &c, mode);
-                }
-            }
-
-            dstBlock+=8;
-            srcBlock+=8;
-          }
-
-          dstBlock = dstBlockStart;
-          srcBlock = srcBlockStart;
 
           for(x = startx, qp_index=0; x < endx; x+=BLOCK_SIZE, qp_index++){
             const int stride= dstStride;
