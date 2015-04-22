@@ -162,6 +162,11 @@ static uint8_t *generate_test_blocks(){
 void write_avg_results(uint64_t *block_sums, uint8_t *block_averages,
                        int num_blocks, const char *outfile_name){
     FILE *outfile = fopen(outfile_name, "w");
+    if(!outfile){
+        perror("fopen");
+        fprintf(stderr, "Error opening %s\n", outfile_name);
+        exit(1);
+    }
     fprintf(outfile,"          sum avg |   sum avg |   sum avg |   sum avg\n");
     int i,j;
     int stride = num_total_blocks;
@@ -176,6 +181,7 @@ void write_avg_results(uint64_t *block_sums, uint8_t *block_averages,
                     block_sums[j*stride+i+3], block_averages[j*stride+i+3]);
         }
     }
+    fclose(outfile);
 }
 void write_data_to_file(char *outfile_name, uint8_t *blocks,
                         int num_blocks){
@@ -199,9 +205,14 @@ void write_data_as_text(char *outfile_name, uint8_t *blocks, int num_blocks){
     int i,j,k;
     char *tmp_lines[4];
     for(i=0;i<4;i++){
-        tmp_lines[i]=calloc(1,40);
+        tmp_lines[i] = calloc(1,40);
     }
     FILE *outfile = fopen(outfile_name, "w");
+    if(!outfile){
+        perror("fopen");
+        fprintf(stderr, "Error opening %s\n", outfile_name);
+        exit(1);
+    }
     for(i=0;i<num_blocks;i++){
         for(k=0;k<8;k++){
             for(j=0;j<8;j++){
@@ -221,8 +232,13 @@ void write_data_as_text(char *outfile_name, uint8_t *blocks, int num_blocks){
         }
         fprintf(outfile, "\n");
     }
+    fflush(outfile);
+    fclose(outfile);
+    for(i=0;i<4;i++){
+        free(tmp_lines[i]);
+    }
 }
-//allocate a PPContext struct and initialize any fields that may be needed
+/*//allocate a PPContext struct and initialize any fields that may be needed
 PPContext *allocate_PPContext(){
     PPContext *c = malloc(sizeof(PPContext));
 //defaults taken from postprocess.c    
@@ -251,7 +267,7 @@ PPContext *allocate_PPContext(){
 }
 //default for chroma, luma is too complicated for right now
     c.packedYScale= 0x0100010001000100LL;
-    c.packedYOffset= 0;
+    c.packedYOffset= 0;*/
 static inline uint8_t unsigned_saturate(uint64_t x){
     return x >= 0xff ? 0xff : x;
 }
@@ -278,7 +294,7 @@ void run_deint_filter_test(deinterlace_filter filter, uint8_t *blocks,
             block_averages[i+j] = unsigned_saturate(block_sums[i+j]/64);
         }
     }
-    write_data_as_text(outfile_name, blocks, num_blocks);
+    write_data_to_file(outfile_name, blocks, num_blocks);
 }
 
 /*
@@ -296,10 +312,9 @@ int main(int argc, char **argv){
         int len = strlen(outdir);
         //append '/' to outdir if not present
         if(outdir[len-1] != '/'){
-            char *tmp = malloc(len+2);
+            char *tmp = calloc(len+2,1);
             memcpy(tmp, argv[1], len);
             tmp[len] = '/';
-            tmp[len+1]='\0';
             outdir = tmp;
         }
     }
@@ -307,8 +322,10 @@ int main(int argc, char **argv){
     int i,j;
     char *data_outfiles[30];
     char *avg_outfiles[6];
+    uint8_t *blocks = aligned_alloc(32, num_total_blocks*64);
+    uint8_t *blocks_src = generate_test_blocks();
     for(i=0;i<6;i++){
-        avg_outfiles[i] = malloc(outfile_size);
+        avg_outfiles[i] = calloc(outfile_size,1);
         snprintf(avg_outfiles[i], outfile_size,
                  "%s%s_avgs", outdir, deint_filter_names[i]);
         for(j=0;j<5;j++){
@@ -325,13 +342,12 @@ int main(int argc, char **argv){
 */
     uint64_t *block_sums = malloc(sizeof(uint64_t)*num_total_blocks*5);
     uint8_t *block_avgs = malloc(sizeof(uint8_t)*num_total_blocks*5);
-    uint8_t *blocks = aligned_alloc(32, num_total_blocks*64);
-    uint8_t *blocks_src = generate_test_blocks();
-    char *input_outfile = malloc(outfile_size);
+    char *input_outfile = calloc(outfile_size,1);
     snprintf(input_outfile, outfile_size, "%s%s", outdir, "input_data");
     write_data_as_text(input_outfile, blocks_src, num_total_blocks);
     __builtin_cpu_init();
-    int features[5] = {1, __builtin_cpu_supports("sse"),
+    int features[5] = {1,
+                       __builtin_cpu_supports("sse"),
                        __builtin_cpu_supports("sse"),
                        __builtin_cpu_supports("sse2"),
                        __builtin_cpu_supports("avx2")};
