@@ -124,7 +124,7 @@ extern void RENAME(ff_deInterlaceMedian)(uint8_t *, int);
 extern void RENAME(ff_do_a_deblock)(uint8_t *, int, int, PPContext*, int);
 extern void RENAME(ff_blockCopy)(uint8_t*,int,const uint8_t*,
                                  int,int,int64_t*);
-extern void RENAME(ff_duplicate)(uint8_t, int);
+extern void RENAME(ff_duplicate)(uint8_t*, int);
 static inline void RENAME(deInterlaceInterpolateLinear)(uint8_t src[],
                                                         int stride)
 {
@@ -1587,7 +1587,6 @@ static inline void RENAME(deInterlaceInterpolateLinear)(uint8_t src[], int strid
     }
 #endif
 }
-#endif
 /**
  * Deinterlace the given block by cubic interpolating every second line.
  * will be called for every 8x8 block and can read & write from line 4-15
@@ -1674,7 +1673,6 @@ DEINT_CUBIC((%%REGd, %1), (%0, %1, 8) , (%%REGd, %1, 4), (%%REGc)    , (%%REGc, 
     }
 #endif //TEMPLATE_PP_SSE2 || TEMPLATE_PP_MMXEXT || TEMPLATE_PP_3DNOW
 }
-#endif
 /**
  * Deinterlace the given block by filtering every second line with a (-1 4 2 4 -1) filter.
  * will be called for every 8x8 block and can read & write from line 4-15
@@ -1753,7 +1751,7 @@ DEINT_FF((%%REGd, %1), (%%REGd, %1, 2), (%0, %1, 8) , (%%REGd, %1, 4))
     }
 #endif //TEMPLATE_PP_MMXEXT || TEMPLATE_PP_3DNOW
 }
-#endif
+
 /**
  * Deinterlace the given block by filtering every line with a (-1 2 6 2 -1) filter.
  * will be called for every 8x8 block and can read & write from line 4-15
@@ -1854,7 +1852,6 @@ DEINT_L5(%%mm1, %%mm0, (%%REGd, %1, 2), (%0, %1, 8)    , (%%REGd, %1, 4))
     }
 #endif //(TEMPLATE_PP_MMXEXT || TEMPLATE_PP_3DNOW) && HAVE_6REGS
 }
-#endif
 /**
  * Deinterlace the given block by filtering all lines with a (1 2 1) filter.
  * will be called for every 8x8 block and can read & write from line 4-15
@@ -1956,7 +1953,6 @@ static inline void RENAME(deInterlaceBlendLinear)(uint8_t src[], int stride, uin
     }
 #endif //TEMPLATE_PP_MMXEXT || TEMPLATE_PP_3DNOW
 }
-#endif
 /**
  * Deinterlace the given block by applying a median filter to every second line.
  * will be called for every 8x8 block and can read & write from line 4-15,
@@ -2079,7 +2075,6 @@ MEDIAN((%%REGd, %1), (%%REGd, %1, 2), (%0, %1, 8))
     }
 #endif //TEMPLATE_PP_MMX
 }
-#endif
 #if TEMPLATE_PP_MMX
 /**
  * Transpose and shift the given 8x8 Block into dst1 and dst2.
@@ -3308,7 +3303,6 @@ SIMPLE_CPY((%%REGa, %2), (%%REGa, %2, 2), (%%REGd, %3), (%%REGd, %3, 2))
 #endif //TEMPLATE_PP_MMX && HAVE_6REGS
     }
 }
-#endif
 /**
  * Duplicate the given 8 src pixels ? times upward
  */
@@ -3336,7 +3330,6 @@ static inline void RENAME(duplicate)(uint8_t src[], int stride)
 #endif
 }
 #endif //initial TEMPLATE_PP_SSE2
-
 #if ARCH_X86 && TEMPLATE_PP_MMXEXT
 static inline void RENAME(prefetchnta)(const void *p)
 {
@@ -3346,7 +3339,6 @@ static inline void RENAME(prefetcht0)(const void *p)
 {
     __asm__ volatile("prefetcht0 (%0)\n\t" : : "r" (p));
 }
-
 static inline void RENAME(prefetcht1)(const void *p)
 {
     __asm__ volatile("prefetcht1 (%0)\n\t" : : "r" (p));
@@ -3630,10 +3622,6 @@ static void RENAME(postProcess)(const uint8_t src[], int srcStride, uint8_t dst[
         c.packedYOffset= 0;
         QPCorrecture= 256*256;
     }
-#if TEMPLATE_PP_SSE2
-#undef RENAME
-#define RENAME(x) x ## _mmx2
-#endif
     /* copy & deinterlace first row of blocks */
     y=-BLOCK_SIZE;
     {
