@@ -3412,48 +3412,40 @@ static inline void RENAME(deblock)(uint8_t *dstBlock, int stride,
                                    int step, PPContext c, int mode,
                                    int num_blocks)
 {
-    //usually processes 4 blocks, unless there are less than 4 left
-    int qp_index = 0;
+    int block_index = 0;
+    while(block_index < num_blocks){
+        c.QP = c.QP_block[block_index];
+        c.nonBQP = c.nonBQP_block[block_index];
+        c.pQPb = c.pQPb_block[block_index];
+        c.pQPb2 = c.pQPb2_block[block_index];
+        if(mode & V_A_DEBLOCK){
+            //usually processes 4 blocks, unless there are less than 4 left
 #if TEMPLATE_PP_AVX2
-    if(num_blocks == 4 && (mode & V_A_DEBLOCK)){
-        RENAME(do_a_deblock)(dstBlock, stride, step, &c, mode);
-        qp_index = 4;
-    }
-#elif TEMPLATE_PP_SSE2
-    if(num_blocks >= 2 && (mode & V_A_DEBLOCK)){
-        if(num_blocks == 4){
-            RENAME(do_a_deblock)(dstBlock, stride, 0, &c, mode);
-            RENAME(do_a_deblock)(dstBlock + 16, stride, 8, &c, mode);
-            qp_index = 4;//skip for loop
-        } else {
-            RENAME(do_a_deblock)(dstBlock, stride, 0, &c, mode);
-            dstBlock +=8;
-            qp_index = 2;
-        }
-    }
-#endif
-    for(;qp_index<num_blocks;qp_index++){
-        c.QP = c.QP_block[qp_index];
-        c.nonBQP = c.nonBQP_block[qp_index];
-        c.pQPb = c.pQPb_block[qp_index];
-        c.pQPb2 = c.pQPb2_block[qp_index];
-        if(mode & V_X1_FILTER){
-            RENAME(vertX1Filter)(dstBlock, stride, &c);
-        } else if(mode & V_DEBLOCK){
-            const int t = RENAME(vertClassify)(dstBlock, stride, &c);
-            if(t == 1){
-                RENAME(doVertLowPass)(dstBlock, stride, &c);
-            } else if(t == 2){
-                RENAME(doVertDefFilter)(dstBlock, stride, &c);
+            if(num_blocks == 4){
+                RENAME(do_a_deblock)(dstBlock, stride, step, &c, mode);
+                block_index += 4;
+                continue;
             }
-        } else if(mode & V_A_DEBLOCK){
-#if TEMPLATE_PP_SSE2
-            do_a_deblock_MMX2(dstBlock, stride, step, &c, mode);
-#else
-            RENAME(do_a_deblock)(dstBlock, stride, step, &c, mode);
 #endif
+#if TEMPLATE_PP_SSE2
+            if(block_index-num_blocks >= 2){
+                do_a_deblock_sse2(dstBlock + block_index*8, stride, 0, &c, mode);
+                block_index += 2;
+                continue;
+            }
+#endif
+            RENAME_SCALAR(do_a_deblock)(dstBlock + block_index*8, stride, 0, &c, mode);
+        } else if(mode & V_X1_FILTER){
+                RENAME_SCALAR(vertX1Filter)(dstBlock, stride, &c);
+        } else if(mode & V_DEBLOCK){
+            const int t = RENAME_SCALAR(vertClassify)(dstBlock, stride, &c);
+            if(t == 1){
+                RENAME_SCALAR(doVertLowPass)(dstBlock, stride, &c);
+            } else if(t == 2){
+                RENAME_SCALAR(doVertDefFilter)(dstBlock, stride, &c);
+            }
         }
-        dstBlock += 8;
+        block_index++;
     }
 }
 /*
@@ -3732,10 +3724,9 @@ static void RENAME(postProcess)(const uint8_t src[], int srcStride,
             int startx = x;
             int endx = FFMIN(width, x+32);
             int num_blocks = (endx-startx)/8;
-            uint8_t *dstBlockStart = dstBlock;
-            const uint8_t *srcBlockStart = srcBlock;
+            int block_index;
             int qp_index = 0;
-            for(qp_index=0; qp_index < (endx-startx)/BLOCK_SIZE; qp_index++){
+            for(qp_index=0; qp_index < num_blocks; qp_index++){
                 QP = QPptr[(x+qp_index*BLOCK_SIZE)>>qpHShift];
                 nonBQP = nonBQPptr[(x+qp_index*BLOCK_SIZE)>>qpHShift];
 
