@@ -69,9 +69,20 @@
 #   define TEMPLATE_PP_MMX 1
 #   undef  TEMPLATE_PP_MMXEXT
 #   define TEMPLATE_PP_MMXEXT 1
-#   define RENAME(a) a ## _SSE2
+#   define RENAME(a) a ## _sse2
 #else
 #   define TEMPLATE_PP_SSE2 0
+#endif
+#ifdef TEMPLATE_PP_AVX2
+#   undef  TEMPLATE_PP_MMX
+#   define TEMPLATE_PP_MMX 1
+#   undef  TEMPLATE_PP_MMXEXT
+#   define TEMPLATE_PP_MMXEXT 1
+#   undef  TEMPLATE_PP_SSE2
+#   define TEMPLATE_PP_SSE2 1
+#   define RENAME(a) a ## _avx2
+#else
+#   define TEMPLATE_PP_AVX2 0
 #endif
 
 #undef REAL_PAVGB
@@ -102,7 +113,64 @@
     "psubusb " #a ", " #b " \n\t"\
     "paddb " #a ", " #b " \n\t"
 #endif
+//inline wrapper functions around the yasm simd code
 
+#if TEMPLATE_PP_SSE2
+extern void RENAME(ff_deInterlaceInterpolateLinear)(uint8_t *, int);
+extern void RENAME(ff_deInterlaceInterpolateCubic)(uint8_t *, int);
+extern void RENAME(ff_deInterlaceFF)(uint8_t *, int, uint8_t *);
+extern void RENAME(ff_deInterlaceL5)(uint8_t *, int, uint8_t *, uint8_t*);
+extern void RENAME(ff_deInterlaceBlendLinear)(uint8_t *, int, uint8_t *);
+extern void RENAME(ff_deInterlaceMedian)(uint8_t *, int);
+extern void RENAME(ff_blockCopy)(uint8_t*,int,const uint8_t*,
+                                 int,int,int64_t*);
+extern void RENAME(ff_duplicate)(uint8_t*, int);
+static inline void RENAME(deInterlaceInterpolateLinear)(uint8_t src[],
+                                                        int stride)
+{
+    RENAME(ff_deInterlaceInterpolateLinear)(src, stride);
+}
+static inline void RENAME(deInterlaceInterpolateCubic)(uint8_t src[],
+                                                        int stride)
+{
+    RENAME(ff_deInterlaceInterpolateCubic)(src, stride);
+}
+static inline void RENAME(deInterlaceFF)(uint8_t src[], int stride,
+                                         uint8_t *tmp)
+{
+    RENAME(ff_deInterlaceFF)(src, stride, tmp);
+}
+static inline void RENAME(deInterlaceL5)(uint8_t src[], int stride,
+                                         uint8_t *tmp, uint8_t *tmp2)
+{
+    RENAME(ff_deInterlaceL5)(src, stride, tmp, tmp2);
+}
+static inline void RENAME(deInterlaceBlendLinear)(uint8_t src[], int stride,
+                                                  uint8_t *tmp)
+{
+    RENAME(ff_deInterlaceBlendLinear)(src, stride, tmp);
+}
+static inline void RENAME(deInterlaceMedian)(uint8_t src[], int stride)
+{
+    RENAME(ff_deInterlaceMedian)(src, stride);
+}
+/*
+static inline void RENAME(blockCopy)(uint8_t dst[], int dstStride,
+                                     const uint8_t src[], int srcStride,
+                                     int levelFix, int64_t *packedOffsetAndScale)
+{
+    RENAME(ff_blockCopy)(dst,dstStride,src,srcStride,
+                         levelFix,packedOffsetAndScale);
+}*/
+static inline void RENAME(duplicate)(uint8_t *src, int stride)
+{
+/*    RENAME(ff_duplicate)(src, stride);*/
+    int i;
+    for(i=0;i<32;i+=8){
+        duplicate_MMX2(src+i, stride);
+    }
+}
+#else
 //FIXME? |255-0| = 1 (should not be a problem ...)
 #if TEMPLATE_PP_MMX
 /**
@@ -3241,6 +3309,7 @@ static inline void RENAME(duplicate)(uint8_t src[], int stride)
     }
 #endif
 }
+#endif //initial TEMPLATE_PP_SSE2
 
 #if ARCH_X86 && TEMPLATE_PP_MMXEXT
 static inline void RENAME(prefetchnta)(const void *p)
@@ -3305,6 +3374,44 @@ static inline void RENAME(prefetcht2)(const void *p)
     return;
 }
 #endif
+/*
+  This calls a rather trivial assembly function, there is some performance
+  overhead to the function call vs using inline asm, but (at least I think)
+  that having less inline asm is worth it.
+*/
+#if TEMPLATE_PP_MMX
+static inline void RENAME(packQP)(PPContext *c)
+{
+#if TEMPLATE_PP_SSE2
+    ff_packQP_sse2(c);
+#else //despite the name this only uses mmx instructions
+    ff_packQP_mmx2(c);
+#endif
+}
+#endif
+
+static inline void RENAME(deInterlace)(uint8_t *dstBlock, int dstStride,
+                                       uint8_t *tmp, uint8_t *tmp2,
+                                       int mode, const int duplicate)
+{
+    if(duplicate){
+        RENAME(duplicate)(dstBlock + dstStride*8, dstStride);
+    }
+    if(mode & LINEAR_IPOL_DEINT_FILTER){
+        RENAME(deInterlaceInterpolateLinear)(dstBlock, dstStride);
+    } else if(mode & LINEAR_BLEND_DEINT_FILTER){
+        RENAME(deInterlaceBlendLinear)(dstBlock, dstStride, tmp);
+    } else if(mode & MEDIAN_DEINT_FILTER){
+        RENAME(deInterlaceMedian)(dstBlock, dstStride);
+    } else if(mode & CUBIC_IPOL_DEINT_FILTER){
+        RENAME(deInterlaceInterpolateCubic)(dstBlock, dstStride);
+    } else if(mode & FFMPEG_DEINT_FILTER){
+        RENAME(deInterlaceFF)(dstBlock, dstStride, tmp);
+    } else if(mode & LOWPASS5_DEINT_FILTER){
+        RENAME(deInterlaceL5)(dstBlock, dstStride, tmp, tmp2);
+    }
+}
+
 /**
  * Filter array of bytes (Y or U or V values)
  */
@@ -3421,6 +3528,10 @@ static void RENAME(postProcess)(const uint8_t src[], int srcStride, uint8_t dst[
         QPCorrecture= 256*256;
     }
 
+#if TEMPLATE_PP_SSE2
+#undef RENAME
+#define RENAME(x) x ## _MMX2
+#endif
     /* copy & deinterlace first row of blocks */
     y=-BLOCK_SIZE;
     {
@@ -3436,26 +3547,60 @@ static void RENAME(postProcess)(const uint8_t src[], int srcStride, uint8_t dst[
             RENAME(prefetcht0)(dstBlock + (((x>>2)&6) + copyAhead)*dstStride + 32);
             RENAME(prefetcht0)(dstBlock + (((x>>2)&6) + copyAhead+1)*dstStride + 32);
 
+#if TEMPLATE_PP_AVX2
+            if(x + BLOCK_SIZE*4 <= width){
+                blockCopy_MMX2(dstBlock + dstStride*copyAhead, dstStride,
+                               srcBlock + srcStride*copyAhead, srcStride,
+                               mode & LEVEL_FIX, &c.packedYOffset);
+                blockCopy_MMX2(dstBlock + dstStride*copyAhead + 8, dstStride,
+                               srcBlock + srcStride*copyAhead + 8, srcStride,
+                               mode & LEVEL_FIX, &c.packedYOffset);
+                blockCopy_MMX2(dstBlock + dstStride*copyAhead + 16, dstStride,
+                               srcBlock + srcStride*copyAhead + 16, srcStride,
+                               mode & LEVEL_FIX, &c.packedYOffset);
+                blockCopy_MMX2(dstBlock + dstStride*copyAhead + 24, dstStride,
+                               srcBlock + srcStride*copyAhead + 24, srcStride,
+                               mode & LEVEL_FIX, &c.packedYOffset);
+
+                RENAME(deInterlace)(dstBlock, dstStride, c.deintTemp +x,
+                                    c.deintTemp + width + x, mode, 1);
+                dstBlock+=24;
+                srcBlock+=24;
+                //kinda hacky but ohwell
+                x+=3*BLOCK_SIZE;
+            } else {
+                blockCopy_MMX2(dstBlock + dstStride*8, dstStride,
+                               srcBlock + srcStride*8, srcStride,
+                               mode & LEVEL_FIX, &c.packedYOffset);
+                deInterlace_MMX2(dstBlock, dstStride, c.deintTemp +x,
+                                 c.deintTemp + width + x, mode, 1);
+            }
+#elif TEMPLATE_PP_SSE2
+            if(x + BLOCK_SIZE*2 <= width){
+                blockCopy_MMX2(dstBlock + dstStride*copyAhead, dstStride,
+                               srcBlock + srcStride*copyAhead, srcStride,
+                               mode & LEVEL_FIX, &c.packedYOffset);
+                blockCopy_MMX2(dstBlock + dstStride*copyAhead + 8, dstStride,
+                               srcBlock + srcStride*copyAhead + 8, srcStride,
+                               mode & LEVEL_FIX, &c.packedYOffset);
+                RENAME(deInterlace)(dstBlock, dstStride, c.deintTemp +x,
+                                    c.deintTemp + width + x, mode, 1);
+                dstBlock+=8;
+                srcBlock+=8;
+                x+=BLOCK_SIZE;
+            } else {
+                blockCopy_MMX2(dstBlock + dstStride*8, dstStride,
+                               srcBlock + srcStride*8, srcStride,
+                               mode & LEVEL_FIX, &c.packedYOffset);
+                deInterlace_MMX2(dstBlock, dstStride, c.deintTemp +x,
+                                 c.deintTemp + width + x, mode, 1);
+            }
+#else
             RENAME(blockCopy)(dstBlock + dstStride*8, dstStride,
                               srcBlock + srcStride*8, srcStride, mode & LEVEL_FIX, &c.packedYOffset);
-
-            RENAME(duplicate)(dstBlock + dstStride*8, dstStride);
-
-            if(mode & LINEAR_IPOL_DEINT_FILTER)
-                RENAME(deInterlaceInterpolateLinear)(dstBlock, dstStride);
-            else if(mode & LINEAR_BLEND_DEINT_FILTER)
-                RENAME(deInterlaceBlendLinear)(dstBlock, dstStride, c.deintTemp + x);
-            else if(mode & MEDIAN_DEINT_FILTER)
-                RENAME(deInterlaceMedian)(dstBlock, dstStride);
-            else if(mode & CUBIC_IPOL_DEINT_FILTER)
-                RENAME(deInterlaceInterpolateCubic)(dstBlock, dstStride);
-            else if(mode & FFMPEG_DEINT_FILTER)
-                RENAME(deInterlaceFF)(dstBlock, dstStride, c.deintTemp + x);
-            else if(mode & LOWPASS5_DEINT_FILTER)
-                RENAME(deInterlaceL5)(dstBlock, dstStride, c.deintTemp + x, c.deintTemp + width + x);
-/*          else if(mode & CUBIC_BLEND_DEINT_FILTER)
-                RENAME(deInterlaceBlendCubic)(dstBlock, dstStride);
-*/
+            RENAME(deInterlace)(dstBlock, dstStride, c.deintTemp +x,
+                                c.deintTemp + width + x, mode, 1);
+#endif
             dstBlock+=8;
             srcBlock+=8;
         }
@@ -3524,47 +3669,84 @@ static void RENAME(postProcess)(const uint8_t src[], int srcStride, uint8_t dst[
             c.QP_block[qp_index] = QP;
             c.nonBQP_block[qp_index] = nonBQP;
 #if TEMPLATE_PP_MMX
-            __asm__ volatile(
-                "movd %1, %%mm7         \n\t"
-                "packuswb %%mm7, %%mm7  \n\t" // 0, 0, 0, QP, 0, 0, 0, QP
-                "packuswb %%mm7, %%mm7  \n\t" // 0,QP, 0, QP, 0,QP, 0, QP
-                "packuswb %%mm7, %%mm7  \n\t" // QP,..., QP
-                "movq %%mm7, %0         \n\t"
-                : "=m" (c.pQPb_block[qp_index])
-                : "r" (QP)
-            );
+            RENAME(packQP)(&c);
 #endif
-            }
-          for(; x < endx; x+=BLOCK_SIZE){
-            RENAME(prefetchnta)(srcBlock + (((x>>2)&6) + copyAhead)*srcStride + 32);
-            RENAME(prefetchnta)(srcBlock + (((x>>2)&6) + copyAhead+1)*srcStride + 32);
-            RENAME(prefetcht0)(dstBlock + (((x>>2)&6) + copyAhead)*dstStride + 32);
-            RENAME(prefetcht0)(dstBlock + (((x>>2)&6) + copyAhead+1)*dstStride + 32);
+        }
+            for(;x<endx;x+=BLOCK_SIZE){
+                RENAME(prefetchnta)(srcBlock + (((x>>2)&6) + copyAhead)*srcStride + 32);
+                RENAME(prefetchnta)(srcBlock + (((x>>2)&6) + copyAhead+1)*srcStride + 32);
+                RENAME(prefetcht0)(dstBlock + (((x>>2)&6) + copyAhead)*dstStride + 32);
+                RENAME(prefetcht0)(dstBlock + (((x>>2)&6) + copyAhead+1)*dstStride + 32);
+#if TEMPLATE_PP_AVX2
+                if(x + BLOCK_SIZE*4 <= endx){
+                    blockCopy_MMX2(dstBlock + dstStride*copyAhead, dstStride,
+                                   srcBlock + srcStride*copyAhead, srcStride,
+                                   mode & LEVEL_FIX, &c.packedYOffset);
+                    blockCopy_MMX2(dstBlock + dstStride*copyAhead + 8, dstStride,
+                                   srcBlock + srcStride*copyAhead + 8, srcStride,
+                                   mode & LEVEL_FIX, &c.packedYOffset);
+                    blockCopy_MMX2(dstBlock + dstStride*copyAhead + 16, dstStride,
+                                   srcBlock + srcStride*copyAhead + 16, srcStride,
+                                   mode & LEVEL_FIX, &c.packedYOffset);
+                    blockCopy_MMX2(dstBlock + dstStride*copyAhead + 24, dstStride,
+                                   srcBlock + srcStride*copyAhead + 24, srcStride,
+                                   mode & LEVEL_FIX, &c.packedYOffset);
 
+                    RENAME(deInterlace)(dstBlock, dstStride, c.deintTemp +x,
+                                        c.deintTemp + width + x, mode, 0);
+                    dstBlock+=24;
+                    srcBlock+=24;
+                    //kinda hacky but ohwell
+                    x+=3*BLOCK_SIZE;
+                } else {
+                    blockCopy_MMX2(dstBlock + dstStride*copyAhead, dstStride,
+                                   srcBlock + srcStride*copyAhead, srcStride,
+                                   mode & LEVEL_FIX, &c.packedYOffset);
+                    deInterlace_MMX2(dstBlock, dstStride, c.deintTemp +x,
+                                     c.deintTemp + width + x, mode, 0);
+                }
+#elif TEMPLATE_PP_SSE2
+                if(x + BLOCK_SIZE*2 <= endx){
+/*                    RENAME(blockCopy)(dstBlock + dstStride*copyAhead, dstStride,
+                                      srcBlock + srcStride*copyAhead, srcStride,
+                                      mode & LEVEL_FIX, &c.packedYOffset);
+                    RENAME(deInterlace)(dstBlock, dstStride, c.deintTemp +x,
+                                        c.deintTemp + width + x, mode, 0);*/
+                    blockCopy_MMX2(dstBlock + dstStride*copyAhead, dstStride,
+                                   srcBlock + srcStride*copyAhead, srcStride,
+                                   mode & LEVEL_FIX, &c.packedYOffset);
+                    blockCopy_MMX2(dstBlock + dstStride*copyAhead + 8, dstStride,
+                                   srcBlock + srcStride*copyAhead + 8, srcStride,
+                                   mode & LEVEL_FIX, &c.packedYOffset);
+                    RENAME(deInterlace)(dstBlock, dstStride, c.deintTemp +x,
+                                     c.deintTemp + width + x, mode, 0);
+                    dstBlock+=8;
+                    srcBlock+=8;
+                    x+=BLOCK_SIZE;
+                } else {
+                    blockCopy_MMX2(dstBlock + dstStride*copyAhead, dstStride,
+                                   srcBlock + srcStride*copyAhead, srcStride,
+                                   mode & LEVEL_FIX, &c.packedYOffset);
+                    deInterlace_MMX2(dstBlock, dstStride, c.deintTemp +x,
+                                     c.deintTemp + width + x, mode, 0);
+                }
+#else
             RENAME(blockCopy)(dstBlock + dstStride*copyAhead, dstStride,
                               srcBlock + srcStride*copyAhead, srcStride, mode & LEVEL_FIX, &c.packedYOffset);
-
-            if(mode & LINEAR_IPOL_DEINT_FILTER)
-                RENAME(deInterlaceInterpolateLinear)(dstBlock, dstStride);
-            else if(mode & LINEAR_BLEND_DEINT_FILTER)
-                RENAME(deInterlaceBlendLinear)(dstBlock, dstStride, c.deintTemp + x);
-            else if(mode & MEDIAN_DEINT_FILTER)
-                RENAME(deInterlaceMedian)(dstBlock, dstStride);
-            else if(mode & CUBIC_IPOL_DEINT_FILTER)
-                RENAME(deInterlaceInterpolateCubic)(dstBlock, dstStride);
-            else if(mode & FFMPEG_DEINT_FILTER)
-                RENAME(deInterlaceFF)(dstBlock, dstStride, c.deintTemp + x);
-            else if(mode & LOWPASS5_DEINT_FILTER)
-                RENAME(deInterlaceL5)(dstBlock, dstStride, c.deintTemp + x, c.deintTemp + width + x);
-/*          else if(mode & CUBIC_BLEND_DEINT_FILTER)
-                RENAME(deInterlaceBlendCubic)(dstBlock, dstStride);
-*/
+            RENAME(deInterlace)(dstBlock, dstStride, c.deintTemp +x,
+                                c.deintTemp + width + x, mode, 0);
+#endif
             dstBlock+=8;
             srcBlock+=8;
           }
 
           dstBlock = dstBlockStart;
           srcBlock = srcBlockStart;
+//change back to mmx, if using sse2 or avx2
+#if TEMPLATE_PP_SSE2
+#undef RENAME
+#define RENAME(a) a ## _MMX2
+#endif
 
           for(x = startx, qp_index = 0; x < endx; x+=BLOCK_SIZE, qp_index++){
             const int stride= dstStride;
@@ -3744,3 +3926,4 @@ static void RENAME(postProcess)(const uint8_t src[], int srcStride, uint8_t dst[
 #undef TEMPLATE_PP_MMXEXT
 #undef TEMPLATE_PP_3DNOW
 #undef TEMPLATE_PP_SSE2
+#undef TEMPLATE_PP_AVX2
