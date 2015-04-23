@@ -3311,30 +3311,22 @@ static inline void RENAME(duplicate)(uint8_t src[], int stride)
 #if ARCH_X86 && TEMPLATE_PP_MMXEXT
 static inline void RENAME(prefetchnta)(const void *p)
 {
-    __asm__ volatile(   "prefetchnta (%0)\n\t"
-        : : "r" (p)
-    );
+    __asm__ volatile("prefetchnta (%0)\n\t" : : "r" (p));
 }
 
 static inline void RENAME(prefetcht0)(const void *p)
 {
-    __asm__ volatile(   "prefetcht0 (%0)\n\t"
-        : : "r" (p)
-    );
+    __asm__ volatile("prefetcht0 (%0)\n\t" : : "r" (p));
 }
 
 static inline void RENAME(prefetcht1)(const void *p)
 {
-    __asm__ volatile(   "prefetcht1 (%0)\n\t"
-        : : "r" (p)
-    );
+    __asm__ volatile("prefetcht1 (%0)\n\t" : : "r" (p));
 }
 
 static inline void RENAME(prefetcht2)(const void *p)
 {
-    __asm__ volatile(   "prefetcht2 (%0)\n\t"
-        : : "r" (p)
-    );
+    __asm__ volatile("prefetcht2 (%0)\n\t" : : "r" (p));
 }
 #elif !ARCH_X86 && AV_GCC_VERSION_AT_LEAST(3,2)
 static inline void RENAME(prefetchnta)(const void *p)
@@ -3371,7 +3363,6 @@ static inline void RENAME(prefetcht2)(const void *p)
     return;
 }
 #endif
-
 //pass PPContext by value since this should get inlined into postprocess
 //which has a copy of PPContext on the stack for fast access
 static inline void RENAME(deblock)(uint8_t *dstBlock, int stride,
@@ -3500,8 +3491,11 @@ static inline void RENAME(deInterlace)(uint8_t *dstBlock, int dstStride,
 /**
  * Filter array of bytes (Y or U or V values)
  */
-static void RENAME(postProcess)(const uint8_t src[], int srcStride, uint8_t dst[], int dstStride, int width, int height,
-                                const QP_STORE_T QPs[], int QPStride, int isColor, PPContext *c2)
+static void RENAME(postProcess)(const uint8_t src[], int srcStride,
+                                uint8_t dst[], int dstStride,
+                                int width, int height,
+                                const QP_STORE_T QPs[], int QPStride,
+                                int isColor, PPContext *c2)
 {
     DECLARE_ALIGNED(8, PPContext, c)= *c2; //copy to stack for faster access
     int x,y;
@@ -3589,25 +3583,25 @@ static void RENAME(postProcess)(const uint8_t src[], int srcStride, uint8_t dst[
             clipped-= yHistogram[white];
         }
 
-        scale= (double)(c.ppMode.maxAllowedY - c.ppMode.minAllowedY) / (double)(white-black);
+        scale = (double)(c.ppMode.maxAllowedY - c.ppMode.minAllowedY) / (double)(white-black);
 
 #if TEMPLATE_PP_MMXEXT
-        c.packedYScale= (uint16_t)(scale*256.0 + 0.5);
-        c.packedYOffset= (((black*c.packedYScale)>>8) - c.ppMode.minAllowedY) & 0xFFFF;
+        c.packedYScale = (uint16_t)(scale*256.0 + 0.5);
+        c.packedYOffset = (((black*c.packedYScale)>>8) - c.ppMode.minAllowedY) & 0xFFFF;
 #else
-        c.packedYScale= (uint16_t)(scale*1024.0 + 0.5);
-        c.packedYOffset= (black - c.ppMode.minAllowedY) & 0xFFFF;
+        c.packedYScale = (uint16_t)(scale*1024.0 + 0.5);
+        c.packedYOffset = (black - c.ppMode.minAllowedY) & 0xFFFF;
 #endif
 
-        c.packedYOffset|= c.packedYOffset<<32;
-        c.packedYOffset|= c.packedYOffset<<16;
+        c.packedYOffset |= c.packedYOffset<<32;
+        c.packedYOffset |= c.packedYOffset<<16;
 
-        c.packedYScale|= c.packedYScale<<32;
-        c.packedYScale|= c.packedYScale<<16;
+        c.packedYScale |= c.packedYScale<<32;
+        c.packedYScale |= c.packedYScale<<16;
 
-        if(mode & LEVEL_FIX)        QPCorrecture= (int)(scale*256*256 + 0.5);
-        else                        QPCorrecture= 256*256;
-    }else{
+        if(mode & LEVEL_FIX)        QPCorrecture = (int)(scale*256*256 + 0.5);
+        else                        QPCorrecture = 256*256;
+    } else {
         c.packedYScale= 0x0100010001000100LL;
         c.packedYOffset= 0;
         QPCorrecture= 256*256;
@@ -3658,14 +3652,14 @@ static void RENAME(postProcess)(const uint8_t src[], int srcStride, uint8_t dst[
 
     for(y=0; y<height; y+=BLOCK_SIZE){
         //1% speedup if these are here instead of the inner loop
-        const uint8_t *srcBlock= &(src[y*srcStride]);
-        uint8_t *dstBlock= &(dst[y*dstStride]);
+        const uint8_t *srcBlock = &(src[y*srcStride]);
+        uint8_t *dstBlock = &(dst[y*dstStride]);
 #if TEMPLATE_PP_MMX
-        uint8_t *tempBlock1= c.tempBlocks;
-        uint8_t *tempBlock2= c.tempBlocks + 8;
+        uint8_t *tempBlock1 = c.tempBlocks;
+        uint8_t *tempBlock2 = c.tempBlocks + 8;
 #endif
-        const int8_t *QPptr= &QPs[(y>>qpVShift)*QPStride];
-        int8_t *nonBQPptr= &c.nonBQPTable[(y>>qpVShift)*FFABS(QPStride)];
+        const int8_t *QPptr = &QPs[(y>>qpVShift)*QPStride];
+        int8_t *nonBQPptr = &c.nonBQPTable[(y>>qpVShift)*FFABS(QPStride)];
         int QP=0, nonBQP=0;
         /* can we mess with a 8x16 block from srcBlock/dstBlock downwards and 1 line upwards
            if not than use a temporary buffer */
@@ -3703,15 +3697,16 @@ static void RENAME(postProcess)(const uint8_t src[], int srcStride, uint8_t dst[
             for(qp_index=0; qp_index < num_blocks; qp_index++){
                 QP = QPptr[(x+qp_index*BLOCK_SIZE)>>qpHShift];
                 nonBQP = nonBQPptr[(x+qp_index*BLOCK_SIZE)>>qpHShift];
-            if(!isColor){
-                QP= (QP* QPCorrecture + 256*128)>>16;
-                nonBQP= (nonBQP* QPCorrecture + 256*128)>>16;
-                yHistogram[(srcBlock+qp_index*8)[srcStride*12 + 4]]++;
-            }
-            c.QP_block[qp_index] = QP;
-            c.nonBQP_block[qp_index] = nonBQP;
+
+                if(!isColor){
+                    QP = (QP* QPCorrecture + 256*128)>>16;
+                    nonBQP = (nonBQP* QPCorrecture + 256*128)>>16;
+                    yHistogram[(srcBlock+qp_index*8)[srcStride*12 + 4]]++;
+                }
+                c.QP_block[qp_index] = QP;
+                c.nonBQP_block[qp_index] = nonBQP;
 #if TEMPLATE_PP_MMX
-            RENAME(packQP)(&c);
+                RENAME(packQP)(&c);
 #endif
             }
             RENAME(prefetchnta)(srcBlock + (((x>>2)&6) + copyAhead)*srcStride + 32);
@@ -3728,18 +3723,18 @@ static void RENAME(postProcess)(const uint8_t src[], int srcStride, uint8_t dst[
             if(y+8<height){
                 RENAME(deblock)(dstBlock, dstStride, 1, c, mode, num_blocks);
             }
-          for(x = startx, qp_index=0; x < endx; x+=BLOCK_SIZE, qp_index++){
-            const int stride= dstStride;
-            av_unused uint8_t *tmpXchg;
-            c.QP = c.QP_block[qp_index];
-            c.nonBQP = c.nonBQP_block[qp_index];
-            c.pQPb = c.pQPb_block[qp_index];
-            c.pQPb2 = c.pQPb2_block[qp_index];
+            for(x = startx, qp_index=0; x < endx; x+=BLOCK_SIZE, qp_index++){
+                const int stride= dstStride;
+                av_unused uint8_t *tmpXchg;
+                c.QP = c.QP_block[qp_index];
+                c.nonBQP = c.nonBQP_block[qp_index];
+                c.pQPb = c.pQPb_block[qp_index];
+                c.pQPb2 = c.pQPb2_block[qp_index];
 #if TEMPLATE_PP_MMX
-            RENAME_SCALAR(transpose1)(tempBlock1, tempBlock2, dstBlock, dstStride);
+                RENAME_SCALAR(transpose1)(tempBlock1, tempBlock2, dstBlock, dstStride);
 #endif
-            /* check if we have a previous block to deblock it with dstBlock */
-            if(x - 8 >= 0){
+                /* check if we have a previous block to deblock it with dstBlock */
+                if(x - 8 >= 0){
 #if TEMPLATE_PP_MMX
                 if(mode & H_X1_FILTER)
                         RENAME_SCALAR(vertX1Filter)(tempBlock1, 16, &c);
@@ -3754,59 +3749,74 @@ static void RENAME(postProcess)(const uint8_t src[], int srcStride, uint8_t dst[
                 }
 
                 RENAME_SCALAR(transpose2)(dstBlock-4, dstStride, tempBlock1 + 4*16);
+                    if(mode & H_X1_FILTER){
+                        RENAME_SCALAR(vertX1Filter)(tempBlock1, 16, &c);
+                    } else if(mode & H_DEBLOCK){
+                        const int t= RENAME_SCALAR(vertClassify)(tempBlock1, 16, &c);
+                        if(t==1){
+                            RENAME_SCALAR(doVertLowPass)(tempBlock1, 16, &c);
+                        } else if(t==2){
+                            RENAME_SCALAR(doVertDefFilter)(tempBlock1, 16, &c);
+                        }
+                    } else if(mode & H_A_DEBLOCK){
+                        RENAME_SCALAR(do_a_deblock)(tempBlock1, 16, 1, &c, mode);
+                    }
+
+                    RENAME_SCALAR(transpose2)(dstBlock-4, dstStride, tempBlock1 + 4*16);
+
 #else
-                if(mode & H_X1_FILTER)
-                    horizX1Filter(dstBlock-4, stride, c.QP);
-                else if(mode & H_DEBLOCK){
+                    if(mode & H_X1_FILTER){
+                        horizX1Filter(dstBlock-4, stride, c.QP);
+                    } else if(mode & H_DEBLOCK){
 #if TEMPLATE_PP_ALTIVEC
-                    DECLARE_ALIGNED(16, unsigned char, tempBlock)[272];
-                    int t;
-                    transpose_16x8_char_toPackedAlign_altivec(tempBlock, dstBlock - (4 + 1), stride);
+                        DECLARE_ALIGNED(16, unsigned char, tempBlock)[272];
+                        int t;
+                        transpose_16x8_char_toPackedAlign_altivec(tempBlock, dstBlock - (4 + 1), stride);
 
-                    t = vertClassify_altivec(tempBlock-48, 16, &c);
-                    if(t==1) {
-                        doVertLowPass_altivec(tempBlock-48, 16, &c);
-                        transpose_8x16_char_fromPackedAlign_altivec(dstBlock - (4 + 1), tempBlock, stride);
-                    }
-                    else if(t==2) {
-                        doVertDefFilter_altivec(tempBlock-48, 16, &c);
-                        transpose_8x16_char_fromPackedAlign_altivec(dstBlock - (4 + 1), tempBlock, stride);
-                    }
+                        t = vertClassify_altivec(tempBlock-48, 16, &c);
+                        if(t==1) {
+                            doVertLowPass_altivec(tempBlock-48, 16, &c);
+                            transpose_8x16_char_fromPackedAlign_altivec(dstBlock - (4 + 1), tempBlock, stride);
+                        }
+                        else if(t==2) {
+                            doVertDefFilter_altivec(tempBlock-48, 16, &c);
+                            transpose_8x16_char_fromPackedAlign_altivec(dstBlock - (4 + 1), tempBlock, stride);
+                        }
 #else
-                    const int t= RENAME_SCALAR(horizClassify)(dstBlock-4, stride, &c);
+                        const int t= RENAME_SCALAR(horizClassify)(dstBlock-4, stride, &c);
 
-                    if(t==1)
-                        RENAME_SCALAR(doHorizLowPass)(dstBlock-4, stride, &c);
-                    else if(t==2)
-                        RENAME_SCALAR(doHorizDefFilter)(dstBlock-4, stride, &c);
+                        if(t==1){
+                            RENAME_SCALAR(doHorizLowPass)(dstBlock-4, stride, &c);
+                        } else if(t==2){
+                            RENAME_SCALAR(doHorizDefFilter)(dstBlock-4, stride, &c);
+                        }
 #endif
-                }else if(mode & H_A_DEBLOCK){
-                    RENAME_SCALAR(do_a_deblock)(dstBlock-8, 1, stride, &c, mode);
-                }
+                    } else if(mode & H_A_DEBLOCK){
+                        RENAME_SCALAR(do_a_deblock)(dstBlock-8, 1, stride, &c, mode);
+                    }
 #endif //TEMPLATE_PP_MMX
-                if(mode & DERING){
-                //FIXME filter first line
-                    if(y>0) RENAME_SCALAR(dering)(dstBlock - stride - 8, stride, &c);
+                    if(mode & DERING){
+                        //FIXME filter first line
+                        if(y>0) RENAME_SCALAR(dering)(dstBlock - stride - 8, stride, &c);
+                    }
+
+                    if(mode & TEMP_NOISE_FILTER){
+                        RENAME_SCALAR(tempNoiseReducer)(dstBlock-8, stride,
+                                                 c.tempBlurred[isColor] + y*dstStride + x,
+                                                 c.tempBlurredPast[isColor] + (y>>3)*256 + (x>>3) + 256,
+                                                 c.ppMode.maxTmpNoise);
+                    }
                 }
 
-                if(mode & TEMP_NOISE_FILTER)
-                {
-                    RENAME_SCALAR(tempNoiseReducer)(dstBlock-8, stride,
-                            c.tempBlurred[isColor] + y*dstStride + x,
-                            c.tempBlurredPast[isColor] + (y>>3)*256 + (x>>3) + 256,
-                            c.ppMode.maxTmpNoise);
-                }
-            }
-
-            dstBlock+=8;
-            srcBlock+=8;
+                dstBlock+=8;
+                srcBlock+=8;
 
 #if TEMPLATE_PP_MMX
-            tmpXchg= tempBlock1;
-            tempBlock1= tempBlock2;
-            tempBlock2 = tmpXchg;
+                tmpXchg = tempBlock1;
+                tempBlock1= tempBlock2;
+                tempBlock2 = tmpXchg;
 #endif
-          }
+            }
         }
 
         if(mode & DERING){
@@ -3815,17 +3825,17 @@ static void RENAME(postProcess)(const uint8_t src[], int srcStride, uint8_t dst[
 
         if((mode & TEMP_NOISE_FILTER)){
             RENAME_SCALAR(tempNoiseReducer)(dstBlock-8, dstStride,
-                    c.tempBlurred[isColor] + y*dstStride + x,
-                    c.tempBlurredPast[isColor] + (y>>3)*256 + (x>>3) + 256,
-                    c.ppMode.maxTmpNoise);
+                                            c.tempBlurred[isColor] + y*dstStride + x,
+                                            c.tempBlurredPast[isColor] + (y>>3)*256 + (x>>3) + 256,
+                                            c.ppMode.maxTmpNoise);
         }
 
         /* did we use a tmp buffer for the last lines*/
         if(y+15 >= height){
             uint8_t *dstBlock= &(dst[y*dstStride]);
-            if(width==FFABS(dstStride))
+            if(width==FFABS(dstStride)){
                 linecpy(dstBlock, tempDst + dstStride, height-y, dstStride);
-            else{
+            } else {
                 int i;
                 for(i=0; i<height-y; i++){
                     memcpy(dstBlock + i*dstStride, tempDst + (i+1)*dstStride, width);
@@ -3848,16 +3858,16 @@ static void RENAME(postProcess)(const uint8_t src[], int srcStride, uint8_t dst[
 
         for(i=1; i<256; i++){
             int x;
-            int start=yHistogram[i-1]/(max/256+1);
-            int end=yHistogram[i]/(max/256+1);
-            int inc= end > start ? 1 : -1;
+            int start = yHistogram[i-1]/(max/256+1);
+            int end = yHistogram[i]/(max/256+1);
+            int inc = end > start ? 1 : -1;
             for(x=start; x!=end+inc; x+=inc)
                 dst[ i*dstStride + x]+=128;
         }
 
         for(i=0; i<100; i+=2){
-            dst[ (white)*dstStride + i]+=128;
-            dst[ (black)*dstStride + i]+=128;
+            dst[(white)*dstStride + i]+=128;
+            dst[(black)*dstStride + i]+=128;
         }
     }
 #endif
