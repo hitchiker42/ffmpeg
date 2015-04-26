@@ -3245,30 +3245,22 @@ static inline void RENAME(duplicate)(uint8_t src[], int stride)
 #if ARCH_X86 && TEMPLATE_PP_MMXEXT
 static inline void RENAME(prefetchnta)(const void *p)
 {
-    __asm__ volatile(   "prefetchnta (%0)\n\t"
-        : : "r" (p)
-    );
+    __asm__ volatile("prefetchnta (%0)\n\t" : : "r" (p));
 }
 
 static inline void RENAME(prefetcht0)(const void *p)
 {
-    __asm__ volatile(   "prefetcht0 (%0)\n\t"
-        : : "r" (p)
-    );
+    __asm__ volatile("prefetcht0 (%0)\n\t" : : "r" (p));
 }
 
 static inline void RENAME(prefetcht1)(const void *p)
 {
-    __asm__ volatile(   "prefetcht1 (%0)\n\t"
-        : : "r" (p)
-    );
+    __asm__ volatile("prefetcht1 (%0)\n\t" : : "r" (p));
 }
 
 static inline void RENAME(prefetcht2)(const void *p)
 {
-    __asm__ volatile(   "prefetcht2 (%0)\n\t"
-        : : "r" (p)
-    );
+    __asm__ volatile("prefetcht2 (%0)\n\t" : : "r" (p));
 }
 #elif !ARCH_X86 && AV_GCC_VERSION_AT_LEAST(3,2)
 static inline void RENAME(prefetchnta)(const void *p)
