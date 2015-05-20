@@ -172,6 +172,27 @@ typedef struct PPContext{
     PPMode ppMode;
 } PPContext;
 
+void deinterlace_interpolate_linear_C(uint8_t src[], int stride);
+void deinterlace_interpolate_cubic_C(uint8_t src[], int stride);
+void deinterlace_FF_C(uint8_t src[], int stride, uint8_t *tmp);
+void deinterlace_l5_C(uint8_t src[], int stride, uint8_t *tmp, uint8_t *tmp2);
+void deinterlace_blend_linear_C(uint8_t src[], int stride, uint8_t *tmp);
+void deinterlace_median_C(uint8_t src[], int stride);
+int horiz_classify_C(const uint8_t src[], int stride, const PPContext *c);
+int vert_classify_C(const uint8_t src[], int stride, const PPContext *c);
+void do_horiz_def_filter_C(uint8_t dst[], int stride, const PPContext *c);
+void do_horiz_low_pass_C(uint8_t dst[], int stride, const PPContext *c);
+void horiz_X1_filter_C(uint8_t *src, int stride, int QP);
+void do_a_deblock_C(uint8_t *src, int step,
+                    int stride, const PPContext *c, int mode);
+void do_vert_low_pass_C(uint8_t *src, int stride, PPContext *c);
+void vert_X1_filter_C(uint8_t *src, int stride, PPContext *co);
+void do_vert_def_filter_C(uint8_t src[], int stride, PPContext *c);
+void temp_noise_reducer_C(uint8_t *src, int stride,
+                          uint8_t *tempBlurred, uint32_t *tempBlurredPast,
+                          const int *maxNoise);
+void dering_C(uint8_t src[], int stride, PPContext *c);
+
 
 static inline void linecpy(void *dest, const void *src, int lines, int stride) {
     if (stride > 0) {
