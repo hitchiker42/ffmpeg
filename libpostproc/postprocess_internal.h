@@ -71,6 +71,10 @@
 #define BITEXACT                        0x1000000
 #define VISUALIZE                       0x2000000
 
+
+//this shold allow the use of larger simd registers fairly eaisly
+#define BLOCKS_PER_ITERATION 4 //number of blocks to process at once
+
 //use if you want a faster postprocessing code
 //cannot differentiate between chroma & luma filters (both on or both off)
 //obviously the -pp option on the command line has no effect except turning the here selected
@@ -153,6 +157,7 @@ typedef struct PPContext{
     QP_STORE_T *nonBQPTable;
     QP_STORE_T *forcedQPTable;
 
+//these should eventually be removed in favor of the arrays 
     int QP;
     int nonBQP;
 

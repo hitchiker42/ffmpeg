@@ -22,23 +22,24 @@
  */
 #include "postprocess_internal.h"
 
-#define deinterlace_interpolate_linear deinterlace_interpolate_linear_## ##SUFFIX
-#define deinterlace_interpolate_cubic deinterlace_interpolate_cubic_## ##SUFFIX
-#define deinterlace_FF deinterlace_FF_## ##SUFFIX
-#define deinterlace_l5 deinterlace_l5_## ##SUFFIX
-#define deinterlace_blend_linear deinterlace_blend_linear_## ##SUFFIX
-#define deinterlace_median deinterlace_median_## ##SUFFIX
-#define horiz_classify horiz_classify_## ##SUFFIX
-#define vert_classify vert_classify_## ##SUFFIX
-#define do_horiz_def_filter do_horiz_def_filter_## ##SUFFIX
-#define do_horiz_low_pass do_horiz_low_pass_## ##SUFFIX
-#define horiz_X1_filter horiz_X1_filter_## ##SUFFIX
-#define do_a_deblock do_a_deblock_## ##SUFFIX
-#define do_vert_low_pass do_vert_low_pass_## ##SUFFIX
-#define vert_X1_filter vert_X1_filter_## ##SUFFIX
-#define do_vert_def_filter do_vert_def_filter_## ##SUFFIX
-#define temp_noise_reducer temp_noise_reducer_## ##SUFFIX
-#define dering dering_## ##SUFFIX
+#define postprocess postprocess_ ## SUFFIX
+#define deinterlace_interpolate_linear deinterlace_interpolate_linear_ ## SUFFIX
+#define deinterlace_interpolate_cubic deinterlace_interpolate_cubic_ ## SUFFIX
+#define deinterlace_FF deinterlace_FF_ ## SUFFIX
+#define deinterlace_l5 deinterlace_l5_ ## SUFFIX
+#define deinterlace_blend_linear deinterlace_blend_linear_ ## SUFFIX
+#define deinterlace_median deinterlace_median_ ## SUFFIX
+#define horiz_classify horiz_classify_ ## SUFFIX
+#define vert_classify vert_classify_ ## SUFFIX
+#define do_horiz_def_filter do_horiz_def_filter_ ## SUFFIX
+#define do_horiz_low_pass do_horiz_low_pass_ ## SUFFIX
+#define horiz_X1_filter horiz_X1_filter_ ## SUFFIX
+#define do_a_deblock do_a_deblock_ ## SUFFIX
+#define do_vert_low_pass do_vert_low_pass_ ## SUFFIX
+#define vert_X1_filter vert_X1_filter_ ## SUFFIX
+#define do_vert_def_filter do_vert_def_filter_ ## SUFFIX
+#define temp_noise_reducer temp_noise_reducer_ ## SUFFIX
+#define dering dering_ ## SUFFIX
 #define prefetchnta prefetchnta_ ## SUFFIX
 #define prefetcht0 prefetcht0_ ## SUFFIX
 #define block_copy block_copy_ ## SUFFIX
@@ -46,8 +47,12 @@
 #define deinterlace_internal deinterlace_internal_ ## SUFFIX
 #define vdeblock_internal vdeblock_internal_ ## SUFFIX
 #define hdeblock_internal hdeblock_internal_ ## SUFFIX
-
-static inline vdeblock_internal(uint8_t *dstBlock, int stride, PPContext *c, int mode)
+/*
+  Put the code dealing with the number of blocks in these helper functions, that way
+  both the filters and the postprocess function don't need to worry about how many
+  blocks are being processed each loop.
+*/
+static inline vdeblock_internal(uint8_t *dstBlock, int stride, PPContext *c, int mode, int blocks)
 {
 
     if(mode & V_X1_FILTER){
@@ -66,7 +71,7 @@ static inline vdeblock_internal(uint8_t *dstBlock, int stride, PPContext *c, int
 }
 
 //This may need to be a more complicated function
-static inline hdeblock_internal(uint8_t *dstBlock, int stride, PPContext *c, int mode)
+static inline hdeblock_internal(uint8_t *dstBlock, int stride, PPContext *c, int mode, int blocks)
 {
     av_unused uint8_t *tempBlock1 = c.tempBlocks;
     av_unused uint8_t *tempBlock2 = c.tempBlocks + 8;
@@ -123,7 +128,8 @@ static inline hdeblock_internal(uint8_t *dstBlock, int stride, PPContext *c, int
 
 //IDEA: replace this with a function pointer
 static inline void deinterlace_internal(uint8_t *dstBlock, int dstStride,
-                                        uint8_t *tmp, uint8_t *tmp2, int mode)
+                                        uint8_t *tmp, uint8_t *tmp2, 
+                                        int mode, int blocks)
 {
     if(mode & LINEAR_IPOL_DEINT_FILTER){
         deinterlace_interpolate_linear(dstBlock + block_index*8, dstStride);
@@ -143,7 +149,7 @@ static inline void deinterlace_internal(uint8_t *dstBlock, int dstStride,
 /**
  * Filter array of bytes (Y or U or V values)
  */
-void postProcess(const uint8_t src[], int srcStride,
+void post_process(const uint8_t src[], int srcStride,
                  uint8_t dst[], int dstStride, int width, int height,
                  const QP_STORE_T QPs[], int QPStride,
                  int isColor, PPContext *c2)
@@ -331,11 +337,10 @@ void postProcess(const uint8_t src[], int srcStride,
         }
 
         // From this point on it is guaranteed that we can read and write 16 lines downward
-        // finish 1 block before the next otherwise we might have a problem
-        // with the L1 Cache of the P4 ... or only a few blocks at a time or something
+        // Process BLOCKS_PER_ITERATION number of blocks each loop iteration
         for(x=0; x<width; ){
             int startx = x;
-            int endx = FFMIN(width, x+32);
+            int endx = FFMIN(width, x+(8*BLOCKS_PER_ITERATION));
             uint8_t *dstBlockStart = dstBlock;
             const uint8_t *srcBlockStart = srcBlock;
             int qp_index = 0;
@@ -364,9 +369,9 @@ void postProcess(const uint8_t src[], int srcStride,
                           mode & LEVEL_FIX, &c.packedYOffset);
 
                 deinterlace_internal(dstBlock, dstStride, c.deintTemp +x,
-                                     c.deintTemp + width + x, mode)
+                                     c.deintTemp + width + x, mode);
 
-                    dstBlock+=8;
+                dstBlock+=8;
                 srcBlock+=8;
             }
 
@@ -486,3 +491,30 @@ void postProcess(const uint8_t src[], int srcStride,
 #undef deinterlace_internal
 #undef vdeblock_internal
 #undef hdeblock_internal
+/*
+  ex use:
+
+  #define SUFFIX C
+  #define POSTPROCESS_SIMD 0
+  #include "postprocess_internal.c"
+  #undef SUFFIX
+  #undef POSTPROCESS_SIMD
+
+  #define POSTPROCESS_SIMD 1
+  #define SUFFIX MMX2
+  #define SIMD_CLEANUP() __asm__ volatile("emms")
+  #include "postprocess_internal.c"
+  #undef SUFFIX
+  #undef SIMD_CLEANUP
+
+  #define SIMD_CLEANUP()
+  #define SUFFIX SSE2
+  #include "postprocess_internal.c"
+  #undef SUFFIX
+  
+  #define SUFFIX AVX2
+  #include "postprocess_internal.c"
+  #undef SUFFIX
+  
+  /* do altivec stuff */
+*/

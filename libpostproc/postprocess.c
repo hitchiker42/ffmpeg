@@ -347,21 +347,21 @@ pp_mode *pp_get_mode_by_name_and_quality(const char *name, int quality)
 
     for(;;){
         const char *filterName;
-        int q= 1000000; //PP_QUALITY_MAX;
-        int chrom=-1;
-        int luma=-1;
+        int q = 1000000; //PP_QUALITY_MAX;
+        int chrom = -1;
+        int luma = -1;
         const char *option;
         const char *options[OPTIONS_ARRAY_SIZE];
         int i;
-        int filterNameOk=0;
-        int numOfUnknownOptions=0;
-        int enable=1; //does the user want us to enabled or disabled the filter
+        int filterNameOk = 0;
+        int numOfUnknownOptions = 0;
+        int enable = 1; //does the user want us to enabled or disabled the filter
         char *tokstate;
 
-        filterToken= av_strtok(p, filterDelimiters, &tokstate);
+        filterToken = av_strtok(p, filterDelimiters, &tokstate);
         if(!filterToken) break;
-        p+= strlen(filterToken) + 1; // p points to next filterToken
-        filterName= av_strtok(filterToken, optionDelimiters, &tokstate);
+        p += strlen(filterToken) + 1; // p points to next filterToken
+        filterName = av_strtok(filterToken, optionDelimiters, &tokstate);
         if (!filterName) {
             ppMode->error++;
             break;
@@ -374,15 +374,19 @@ pp_mode *pp_get_mode_by_name_and_quality(const char *name, int quality)
         }
 
         for(;;){ //for all options
-            option= av_strtok(NULL, optionDelimiters, &tokstate);
+            option = av_strtok(NULL, optionDelimiters, &tokstate);
             if(!option) break;
 
             av_log(NULL, AV_LOG_DEBUG, "pp: option: %s\n", option);
-            if(!strcmp("autoq", option) || !strcmp("a", option)) q= quality;
-            else if(!strcmp("nochrom", option) || !strcmp("y", option)) chrom=0;
-            else if(!strcmp("chrom", option) || !strcmp("c", option)) chrom=1;
-            else if(!strcmp("noluma", option) || !strcmp("n", option)) luma=0;
-            else{
+            if(!strcmp("autoq", option) || !strcmp("a", option)){
+                q= quality;
+            } else if(!strcmp("nochrom", option) || !strcmp("y", option)){
+                chrom=0;
+            } else if(!strcmp("chrom", option) || !strcmp("c", option)){
+                chrom=1;
+            } else if(!strcmp("noluma", option) || !strcmp("n", option)){
+                luma=0;
+            } else {
                 options[numOfUnknownOptions] = option;
                 numOfUnknownOptions++;
             }
@@ -438,9 +442,7 @@ pp_mode *pp_get_mode_by_name_and_quality(const char *name, int quality)
                             numOfUnknownOptions--;
                         }
                     }
-                }
-                else if(filters[i].mask == TEMP_NOISE_FILTER)
-                {
+                } else if(filters[i].mask == TEMP_NOISE_FILTER){
                     int o;
                     int numOfNoises=0;
 
@@ -454,9 +456,8 @@ pp_mode *pp_get_mode_by_name_and_quality(const char *name, int quality)
                             if(numOfNoises >= 3) break;
                         }
                     }
-                }
-                else if(filters[i].mask == V_DEBLOCK   || filters[i].mask == H_DEBLOCK
-                     || filters[i].mask == V_A_DEBLOCK || filters[i].mask == H_A_DEBLOCK){
+                } else if(filters[i].mask == V_DEBLOCK   || filters[i].mask == H_DEBLOCK
+                       || filters[i].mask == V_A_DEBLOCK || filters[i].mask == H_A_DEBLOCK){
                     int o;
 
                     for(o=0; options[o] && o<2; o++){
@@ -468,8 +469,7 @@ pp_mode *pp_get_mode_by_name_and_quality(const char *name, int quality)
                         if(o==0) ppMode->baseDcDiff= val;
                         else ppMode->flatnessThreshold= val;
                     }
-                }
-                else if(filters[i].mask == FORCE_QUANT){
+                } else if(filters[i].mask == FORCE_QUANT){
                     int o;
                     ppMode->forcedQuant= 15;
 
@@ -503,16 +503,16 @@ void pp_free_mode(pp_mode *mode){
 
 static void reallocAlign(void **p, int size){
     av_free(*p);
-    *p= av_mallocz(size);
+    *p = av_mallocz(size);
 }
 
 static void reallocBuffers(PPContext *c, int width, int height, int stride, int qpStride){
     int mbWidth = (width+15)>>4;
-    int mbHeight= (height+15)>>4;
+    int mbHeight = (height+15)>>4;
     int i;
 
-    c->stride= stride;
-    c->qpStride= qpStride;
+    c->stride = stride;
+    c->qpStride = qpStride;
 
     reallocAlign((void **)&c->tempDst, stride*24+32);
     reallocAlign((void **)&c->tempSrc, stride*24);
@@ -541,19 +541,19 @@ static const AVClass av_codec_context_class = { "Postproc", context_to_name, NUL
 
 av_cold pp_context *pp_get_context(int width, int height, int cpuCaps){
     PPContext *c= av_mallocz(sizeof(PPContext));
-    int stride= FFALIGN(width, 16);  //assumed / will realloc if needed
-    int qpStride= (width+15)/16 + 2; //assumed / will realloc if needed
+    int stride = FFALIGN(width, 16);  //assumed / will realloc if needed
+    int qpStride = (width+15)/16 + 2; //assumed / will realloc if needed
 
     if (!c)
         return NULL;
 
     c->av_class = &av_codec_context_class;
     if(cpuCaps&PP_FORMAT){
-        c->hChromaSubSample= cpuCaps&0x3;
-        c->vChromaSubSample= (cpuCaps>>4)&0x3;
+        c->hChromaSubSample = cpuCaps&0x3;
+        c->vChromaSubSample = (cpuCaps>>4)&0x3;
     }else{
-        c->hChromaSubSample= 1;
-        c->vChromaSubSample= 1;
+        c->hChromaSubSample = 1;
+        c->vChromaSubSample = 1;
     }
     if (cpuCaps & PP_CPU_CAPS_AUTO) {
         c->cpuCaps = av_get_cpu_flags();
@@ -602,10 +602,10 @@ void  pp_postprocess(const uint8_t * src[3], const int srcStride[3],
                      pp_mode *vm,  void *vc, int pict_type)
 {
     int mbWidth = (width+15)>>4;
-    int mbHeight= (height+15)>>4;
+    int mbHeight = (height+15)>>4;
     PPMode *mode = vm;
     PPContext *c = vc;
-    int minStride= FFMAX(FFABS(srcStride[0]), FFABS(dstStride[0]));
+    int minStride = FFMAX(FFABS(srcStride[0]), FFABS(dstStride[0]));
     int absQPStride = FFABS(QPStride);
 
     // c->stride and c->QPStride are always positive
@@ -637,7 +637,8 @@ void  pp_postprocess(const uint8_t * src[3], const int srcStride[3],
         QPStride= absQPStride;
     }
 
-    if(0){
+#if PP_LOG_QP_STORE
+    {
         int x,y;
         for(y=0; y<mbHeight; y++){
             for(x=0; x<mbWidth; x++){
@@ -647,6 +648,7 @@ void  pp_postprocess(const uint8_t * src[3], const int srcStride[3],
         }
         av_log(c, AV_LOG_INFO, "\n");
     }
+#endif
 
     if((pict_type&7)!=3){
         if (QPStride >= 0){
